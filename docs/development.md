@@ -19,6 +19,18 @@ uv run ruff format --check .
 
 后续领域、端口、应用服务与 pipeline 放在 core，具体 Runner/Provider/MCP/检索实现放在 adapters，仓储和文件实现放在 infrastructure。core 只依赖领域与端口，不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
 
+配置代码位于 anyagent/configs，JSON 位于根目录 data/configs。BaseSettings 只统一配置值校验，不作为领域、Port 或 Service 的公共父类；core 使用 runtime 注入的必要配置值。
+
+| 概念 | 职责 |
+| --- | --- |
+| Port | 应用依赖的可替换能力边界，放在 core/ports |
+| Protocol | 表达 Port 的结构化类型契约，实现无需显式继承 |
+| Service | 注入端口、组织业务用例与应用能力 |
+| Stage | 按 pipeline 顺序处理请求，可拒绝或中止后续阶段 |
+| Middleware | 通过 call_next 包裹下游，管理前后处理和清理 |
+
+责任链描述执行顺序，洋葱分层描述代码依赖，两者分别验收。Protocol 不保证 SDK 的运行语义，公共契约测试与真实执行负责验证；Python 类型机制见[官方文档](https://docs.python.org/3/library/typing.html#typing.Protocol)。当前仅实现启动基础，Agent 端口、服务和 pipeline 将随执行闭环开发。
+
 utils 不存放业务策略。包入口不创建数据库、Manager 或网络任务；configs 的共享 JSON 初始化是现有配置约定的例外。尚未进入实施阶段的目录不提前建空壳，新增 Runner 不修改通用 pipeline 或专门新增厂商路由。
 
 ## 文档开发

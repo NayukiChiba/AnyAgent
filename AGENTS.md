@@ -48,8 +48,8 @@ feat(config): 从 JSON 加载运行配置
 运行路径和服务默认值需要统一的配置来源。
 
 改动内容：
-- 通过 configs/default.py 创建默认的 data/configs/cmd_config.json。
-- 通过 configs/load.py 加载并校验当前配置。
+- 通过 anyagent/configs/default.py 创建默认的 data/configs/cmd_config.json。
+- 通过 anyagent/configs/load.py 加载并校验当前配置。
 - 统一以项目根目录为基准解析相对路径。
 
 验证结果：
@@ -71,11 +71,14 @@ feat(config): 从 JSON 加载运行配置
 - 项目通过根目录 `main.py` 启动。
 - 应用源码放在根目录 `anyagent/` 的职责子目录中，包根仅保留用于包标识和版本号的 `__init__.py`，不放业务实现。直接通过 Python 模块导入，不使用 `src/` 层或项目自身的打包安装；uv 只管理依赖，不生成项目的 `egg-info`。`__version__` 与 `pyproject.toml` 中的版本保持一致，不依赖安装元数据。
 - 采用依赖向内的洋葱分层：`core/domain/` 放领域模型和规则，`core/ports/` 定义替换契约，`core/services/`、`core/pipeline/` 及工具、MCP、知识和上下文子目录放应用流程。core 不导入 api、runtime、adapters、infrastructure、utils、configs、Web 框架、ORM 或厂商 SDK；必要配置通过运行快照注入。
+- Port 是应用依赖的能力边界，优先以 Protocol 声明最小方法契约；实现不要求继承。Service 通过构造参数获取端口并组织用例，不为每个 Service 添加无替换需求的接口或统一 BaseService。Protocol 的运行时属性检查不代替签名检查、契约测试或实际执行验收。
+- 责任链用于 pipeline 的阶段顺序与中止，洋葱中间件通过 call_next 包裹下游并管理 finally 清理；call_next 最多调用一次，事件流由执行阶段消费，不按每个 token 重跑下游阶段。Port、Service 和配置模型不承担责任链节点职责。
 - `api/` 放 HTTP 路由、DTO、鉴权依赖、响应与 SSE 转换；`adapters/` 放 Runner、Provider、MCP 协议及检索实现；`infrastructure/` 放仓储和文件实现；`runtime/` 是依赖装配与生命周期入口，负责显式注册。新增 Runner 不在通用 pipeline 或 API 中添加厂商分支。
 - `utils/` 仅放日志等通用技术支撑，不承载业务用例或策略。目录按已进入开发的功能创建，不提前生成未使用的空壳；包入口不创建全局 Manager、数据库、网络连接或任务。
-- 根目录 `configs/` 保存 Python 配置模块：`default.py` 创建默认配置，`load.py` 加载当前配置，`paths.py` 集中获取与校验路径，`__init__.py` 导出共享配置和 paths 模块；启动入口、runtime 和需要配置的外层模块直接获取配置，再注入 core。共享配置导入时创建/修复 JSON 是既有行为的明确例外，不将导入副作用扩展到其他包。
-- 实际配置只使用 JSON，按类型保存于 `data/configs/`，主配置为 `cmd_config.json`，日志配置为 `logging_config.json`，不在根目录 `configs/` 保存 TOML 或 JSON 配置文件。
-- 所有运行目录、文件路径、配置及备份命名规则、相对路径解析和边界校验只在 `configs/paths.py` 定义。新增路径在该模块添加获取函数；其他模块通过 `from configs import paths` 或已校验配置消费路径，不硬编码目录、不自行拼接业务路径、不根据 cwd 或 __file__ 推导部署根。路径获取函数不创建目录或文件，资源创建由其所有者在对应作用域完成。测试夹具的临时路径和 API URL 不属于运行路径硬编码。
+- `anyagent/configs/` 属于洋葱外层支撑：`base.py` 定义共享配置值基类，`models.py` 定义具体配置 schema，`default.py` 创建默认配置，`load.py` 加载当前配置，`paths.py` 集中获取与校验路径，`__init__.py` 导出模型、共享配置和 paths；启动入口、runtime 和需要配置的外层模块直接获取配置，再注入 core。共享配置导入时创建/修复 JSON 是既有行为的明确例外，不将导入副作用扩展到其他包。
+- 配置模型继承项目自己的 BaseSettings（基于 Pydantic BaseModel），统一拒绝未知字段、禁止字段重新赋值和校验默认值；基类不负责文件或环境变量加载，不继承 pydantic_settings.BaseSettings。具体字段按需求加严；frozen 不递归冻结集合，运行快照须单独保证隔离。领域对象、Port、Service 和 API DTO 不继承配置基类。
+- 实际配置只使用 JSON，按类型保存于 `data/configs/`，主配置为 `cmd_config.json`，日志配置为 `logging_config.json`，不在 `anyagent/configs/` 保存 TOML 或 JSON 配置文件。
+- 所有运行目录、文件路径、配置及备份命名规则、相对路径解析和边界校验只在 `anyagent/configs/paths.py` 定义。新增路径在该模块添加获取函数；其他模块通过 `from anyagent.configs import paths` 或已校验配置消费路径，不硬编码目录、不自行拼接业务路径、不根据 cwd 或 __file__ 推导部署根。路径获取函数不创建目录或文件，资源创建由其所有者在对应作用域完成。测试夹具的临时路径和 API URL 不属于运行路径硬编码。
 - 配置类型使用独立默认值和校验模型，新增扩展配置不集中写入主配置；配置缺失时只创建该类型默认 JSON，内容无法加载时先在 `data/configs/` 备份原文件再恢复该类型默认值，文件系统权限错误不得作为格式错误覆盖处理。
 - 平台管理的配置、密钥和运行数据统一保存到根目录 `data/`，不纳入版本控制。
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。

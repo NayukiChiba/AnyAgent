@@ -7,16 +7,18 @@
 | `cmd_config.json` | 主配置：数据路径、服务监听参数 | `cmd_config`，别名 `config` |
 | `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 
-根目录 `configs/default.py` 定义默认值并创建 JSON，`paths.py` 集中定义路径和文件命名规则、解析与边界校验，`load.py` 提供独立配置加载与模型校验，`__init__.py` 导出共享对象。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
+配置代码位于 `anyagent/configs/`，属于应用的外层支撑模块。`base.py` 定义共享校验规则，`models.py` 定义具体配置模型，`default.py` 定义默认值并创建 JSON，`paths.py` 集中处理路径，`load.py` 加载、校验和恢复分类 JSON，`__init__.py` 导出共享对象。实际 JSON 和日志始终保存在项目根目录 data，不随代码迁入应用包。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
 
 ```python
-from configs import cmd_config, logging_config
+from anyagent.configs import cmd_config, logging_config
 
 host = cmd_config.server.host
 log_file = logging_config.file_path
 ```
 
 模块导入时加载当前配置，修改 JSON 后需要重启服务。共享配置对象不可直接修改。
+
+配置模型统一继承项目自己的 `BaseSettings`，基于 Pydantic BaseModel，拒绝未知字段、禁止字段重新赋值并校验默认值。它只处理配置值，不自动读取环境变量、dotenv 或文件；分类 JSON 的加载与恢复由 loader 完成。`frozen` 不递归冻结 list/dict，未来含集合的运行快照需要显式隔离。Pydantic 的配置继承机制见[官方文档](https://docs.pydantic.dev/latest/concepts/config/#change-behaviour-globally)。
 
 ## 主配置
 
@@ -47,7 +49,7 @@ log_file = logging_config.file_path
 需要获取运行文件或目录时，统一使用路径模块：
 
 ```python
-from configs import paths
+from anyagent.configs import paths
 
 config_file = paths.get_config_path("cmd_config")
 logs_dir = paths.get_logs_dir()
@@ -60,11 +62,10 @@ logs_dir = paths.get_logs_dir()
 新增配置类型通过文件名、校验模型和独立默认值接入，不往 cmd_config 添加其他应用模块的全部配置。示例：
 
 ```python
-from pydantic import BaseModel
-from configs import load_config
+from anyagent.configs import BaseSettings, load_config
 
 
-class FeatureConfig(BaseModel):
+class FeatureConfig(BaseSettings):
     enabled: bool
 
 
