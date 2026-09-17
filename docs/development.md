@@ -13,6 +13,14 @@ uv run ruff format --check .
 
 配置测试覆盖创建、加载、错误恢复及路径行为；日志测试覆盖队列清空、异常堆栈、第三方日志、重复配置和轮转。
 
+## 源码分层
+
+包根 anyagent 仅保留 __init__.py。当前 main.py 通过 anyagent.runtime.bootstrap.create_app 装配应用，api/app.py 构造 FastAPI，api/routes/health.py 提供健康检查，utils/logger.py 管理日志。
+
+后续领域、端口、应用服务与 pipeline 放在 core，具体 Runner/Provider/MCP/检索实现放在 adapters，仓储和文件实现放在 infrastructure。core 只依赖领域与端口，不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
+
+utils 不存放业务策略。包入口不创建数据库、Manager 或网络任务；configs 的共享 JSON 初始化是现有配置约定的例外。尚未进入实施阶段的目录不提前建空壳，新增 Runner 不修改通用 pipeline 或专门新增厂商路由。
+
 ## 文档开发
 
 文档使用 [VitePress 1.6](https://vuejs.github.io/vitepress/v1/guide/getting-started)，需要 Node.js 22+。`package.json`、锁文件和依赖安装均位于 `docs/` 中：

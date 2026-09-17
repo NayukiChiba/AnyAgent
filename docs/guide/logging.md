@@ -1,9 +1,9 @@
 # 日志
 
-独立模块 `anyagent.logger` 提供统一日志入口：
+独立模块 `anyagent.utils.logger` 为外层模块提供统一日志入口：
 
 ```python
-from anyagent.logger import logger
+from anyagent.utils.logger import logger
 
 logger.info("Task started: %s", task_id)
 

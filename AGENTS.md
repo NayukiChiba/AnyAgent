@@ -69,13 +69,16 @@ feat(config): 从 JSON 加载运行配置
 ## 项目约定
 
 - 项目通过根目录 `main.py` 启动。
-- 应用源码放在根目录 `anyagent/`，直接通过 Python 模块导入，不使用 `src/` 层或项目自身的打包安装；uv 只管理依赖，不生成项目的 `egg-info`。版本号由 `anyagent/__init__.py` 的 `__version__` 提供，与 `pyproject.toml` 中的版本保持一致，不依赖安装元数据。
-- 根目录 `configs/` 保存 Python 配置模块：`default.py` 创建默认配置，`load.py` 加载当前配置，`__init__.py` 导出共享的 `cmd_config`、`logging_config` 和主配置别名 `config`；启动入口和 `anyagent` 模块直接从 `configs` 获取配置。
+- 应用源码放在根目录 `anyagent/` 的职责子目录中，包根仅保留用于包标识和版本号的 `__init__.py`，不放业务实现。直接通过 Python 模块导入，不使用 `src/` 层或项目自身的打包安装；uv 只管理依赖，不生成项目的 `egg-info`。`__version__` 与 `pyproject.toml` 中的版本保持一致，不依赖安装元数据。
+- 采用依赖向内的洋葱分层：`core/domain/` 放领域模型和规则，`core/ports/` 定义替换契约，`core/services/`、`core/pipeline/` 及工具、MCP、知识和上下文子目录放应用流程。core 不导入 api、runtime、adapters、infrastructure、utils、configs、Web 框架、ORM 或厂商 SDK；必要配置通过运行快照注入。
+- `api/` 放 HTTP 路由、DTO、鉴权依赖、响应与 SSE 转换；`adapters/` 放 Runner、Provider、MCP 协议及检索实现；`infrastructure/` 放仓储和文件实现；`runtime/` 是依赖装配与生命周期入口，负责显式注册。新增 Runner 不在通用 pipeline 或 API 中添加厂商分支。
+- `utils/` 仅放日志等通用技术支撑，不承载业务用例或策略。目录按已进入开发的功能创建，不提前生成未使用的空壳；包入口不创建全局 Manager、数据库、网络连接或任务。
+- 根目录 `configs/` 保存 Python 配置模块：`default.py` 创建默认配置，`load.py` 加载当前配置，`__init__.py` 导出共享的 `cmd_config`、`logging_config` 和主配置别名 `config`；启动入口、runtime 和需要配置的外层模块直接获取配置，再注入 core。共享配置导入时创建/修复 JSON 是既有行为的明确例外，不将导入副作用扩展到其他包。
 - 实际配置只使用 JSON，按类型保存于 `data/configs/`，主配置为 `cmd_config.json`，日志配置为 `logging_config.json`，不在根目录 `configs/` 保存 TOML 或 JSON 配置文件。路径解析统一在 `configs` 模块完成。
 - 配置类型使用独立默认值和校验模型，新增扩展配置不集中写入主配置；配置缺失时只创建该类型默认 JSON，内容无法加载时先在 `data/configs/` 备份原文件再恢复该类型默认值，文件系统权限错误不得作为格式错误覆盖处理。
 - 平台管理的配置、密钥和运行数据统一保存到根目录 `data/`，不纳入版本控制。
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。
 - 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
 
-- 日志统一使用 `anyagent.logger`，日志路径和轮转参数来自共享配置；日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
+- 外层日志统一使用 `anyagent.utils.logger`；core 使用标准库日志接口，不依赖日志文件实现。日志路径和轮转参数来自共享配置，日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
 - 文档使用 VitePress，`package.json`、锁文件和依赖安装均在 `docs/` 内；修改文档需运行 `npm ci` 和 `npm run build`，不提交构建产物或缓存。
