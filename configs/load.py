@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,11 +26,27 @@ class ServerSettings(BaseModel):
     port: int = Field(ge=1, le=65535)
 
 
+class LoggingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = (
+        default.DEFAULT_CONFIG["logging"]["level"]
+    )
+    file_path: Path = default.DEFAULT_CONFIG["logging"]["file_path"]
+    max_bytes: int = Field(
+        default.DEFAULT_CONFIG["logging"]["max_bytes"], ge=1, strict=True
+    )
+    backup_count: int = Field(
+        default.DEFAULT_CONFIG["logging"]["backup_count"], ge=1, strict=True
+    )
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     paths: PathSettings
     server: ServerSettings
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
 
 def load_config() -> Config:
@@ -47,6 +64,11 @@ def load_config() -> Config:
         data_dir = (default.PROJECT_ROOT / config.paths.data_dir).resolve()
         if not data_dir.is_relative_to(default.DATA_DIR.resolve()):
             raise ValueError("paths.data_dir must stay inside the data directory")
+        log_path = (default.PROJECT_ROOT / config.logging.file_path).resolve()
+        if log_path == default.LOGS_DIR.resolve() or not log_path.is_relative_to(
+            default.LOGS_DIR.resolve()
+        ):
+            raise ValueError("logging.file_path must be a file inside data/logs")
     except FileNotFoundError:
         default.create_default_config()
         return load_config()
@@ -61,4 +83,8 @@ def load_config() -> Config:
         default.create_default_config()
         return load_config()
 
-    return Config(paths=PathSettings(data_dir=data_dir), server=config.server)
+    return Config(
+        paths=PathSettings(data_dir=data_dir),
+        server=config.server,
+        logging=config.logging.model_copy(update={"file_path": log_path}),
+    )

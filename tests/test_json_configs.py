@@ -10,6 +10,7 @@ def config_file(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     monkeypatch.setattr(default, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(default, "DATA_DIR", data_dir)
+    monkeypatch.setattr(default, "LOGS_DIR", data_dir / "logs")
     monkeypatch.setattr(default, "CONFIG_FILE", data_dir / "config.json")
     return default.CONFIG_FILE
 
@@ -90,3 +91,27 @@ def test_read_permission_error_is_not_treated_as_invalid_json(config_file, monke
     with pytest.raises(PermissionError):
         load_config()
     assert not config_file.exists()
+
+
+def test_existing_config_without_logging_keeps_saved_values(config_file):
+    config_file.parent.mkdir()
+    original = '{"paths":{"data_dir":"data"},"server":{"host":"localhost","port":9000}}'
+    config_file.write_text(original)
+
+    loaded = load_config()
+
+    assert loaded.server.port == 9000
+    assert loaded.logging.file_path == default.LOGS_DIR / "anyagent.log"
+    assert config_file.read_text() == original
+
+
+def test_log_path_outside_logs_is_backed_up_and_replaced(config_file):
+    default.create_default_config()
+    values = json.loads(config_file.read_text())
+    values["logging"]["file_path"] = "data/elsewhere.log"
+    config_file.write_text(json.dumps(values))
+
+    loaded = load_config()
+
+    assert loaded.logging.file_path == default.LOGS_DIR / "anyagent.log"
+    assert len(list(config_file.parent.glob("config.json.*.bak"))) == 1

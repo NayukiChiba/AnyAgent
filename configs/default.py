@@ -6,10 +6,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 CONFIG_FILE = DATA_DIR / "config.json"
+LOGS_DIR = DATA_DIR / "logs"
 
 DEFAULT_CONFIG = {
     "paths": {"data_dir": "data"},
     "server": {"host": "127.0.0.1", "port": 8000},
+    "logging": {
+        "level": "INFO",
+        "file_path": "data/logs/anyagent.log",
+        "max_bytes": 10485760,
+        "backup_count": 5,
+    },
 }
 
 
