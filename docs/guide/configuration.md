@@ -7,7 +7,7 @@
 | `cmd_config.json` | 主配置：数据路径、服务监听参数 | `cmd_config`，别名 `config` |
 | `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 
-根目录 `configs/default.py` 集中定义默认值和文件路径，`load.py` 提供独立加载与校验，`__init__.py` 导出共享对象。启动入口和 src 模块直接获取所需配置：
+根目录 `configs/default.py` 集中定义默认值和文件路径，`load.py` 提供独立加载与校验，`__init__.py` 导出共享对象。启动入口和 `anyagent` 模块直接获取所需配置：
 
 ```python
 from configs import cmd_config, logging_config
