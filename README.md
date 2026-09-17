@@ -26,6 +26,14 @@ uv run main.py
 uv run main.py --host 0.0.0.0 --port 8080
 ```
 
+启动默认值与路径配置集中在 `configs/app.toml`，不在启动代码中指定。路径相对于项目根目录解析，命令行的 `--host`、`--port` 覆盖配置文件中的值。也可选择其他配置文件：
+
+```bash
+uv run main.py --config configs/app.toml
+```
+
+相对的 `--config` 文件名也以项目根目录为基准；配置缺失或无效时启动失败，不会静默回退。
+
 已安装项目依赖时，也可以使用虚拟环境中的 Python 直接启动：
 
 ```bash
@@ -50,19 +58,26 @@ AnyAgent/
 ├── main.py              # 项目启动入口
 ├── pyproject.toml       # 项目元数据与依赖
 ├── uv.lock              # 依赖锁文件
+├── configs/
+│   └── app.toml          # 路径与服务启动默认值
 ├── src/anyagent/
-│   └── bootstrap.py     # FastAPI 创建与生命周期
+│   ├── configs/          # 配置校验与统一路径解析
+│   └── bootstrap.py      # FastAPI 创建与生命周期
+├── tests/               # 配置与路径行为测试
 ├── data/                # 启动时创建，运行数据，不提交 Git
 └── plans/               # 本地临时规划，不提交 Git
 ```
 
-`data/` 的位置由 `main.py` 所在目录决定，不受启动时的工作目录影响。当前只初始化目录，后续配置、数据库、知识索引、文件和 Runner 状态统一放入该目录。
+`data/` 的位置由 `configs/app.toml` 的 `paths.data_dir` 配置决定，默认是项目根目录的 `data/`，不受启动时的工作目录影响。配置加载统一负责路径解析，并拒绝指向项目根目录外的数据路径。其他模块使用已经解析的路径，不自行拼接目录名。
+
+`configs/` 保存纳入版本控制的启动配置，不保存密钥或运行时生成文件。后续动态配置、数据库、知识索引、文件和 Runner 状态统一放入 `data/`。
 
 ## 开发检查
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run pytest
 ```
 
 `uv.lock` 纳入版本控制；`plans/` 与 `data/` 保持本地使用。

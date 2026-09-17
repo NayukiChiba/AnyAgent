@@ -1,21 +1,29 @@
 import argparse
-from pathlib import Path
 
 import uvicorn
 
 from anyagent.bootstrap import create_app
+from anyagent.configs import load_settings
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start the AnyAgent API server.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--config", help="Configuration file relative to the project root."
+    )
+    parser.add_argument("--host", help="Override the configured server host.")
+    parser.add_argument("--port", type=int, help="Override the configured server port.")
     args = parser.parse_args()
-    if not 1 <= args.port <= 65535:
-        parser.error("--port must be between 1 and 65535")
+    try:
+        settings = load_settings(args.config, host=args.host, port=args.port)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
 
-    data_dir = Path(__file__).resolve().parent / "data"
-    uvicorn.run(create_app(data_dir), host=args.host, port=args.port)
+    uvicorn.run(
+        create_app(settings.paths.data_dir),
+        host=settings.server.host,
+        port=settings.server.port,
+    )
 
 
 if __name__ == "__main__":
