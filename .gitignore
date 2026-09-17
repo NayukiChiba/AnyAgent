@@ -191,6 +191,10 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# VitePress build outputs
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
+
 # PyPI configuration file
 .pypirc
 

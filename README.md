@@ -2,7 +2,7 @@
 
 AnyAgent 是以 FastAPI 为入口的多 Agent Runner 应用平台，目标是通过统一 HTTP API 对接不同 Agent 框架，并提供 MCP、RAG、工具调用和会话管理能力，方便其他平台接入。
 
-项目目前处于开发初期，已实现 `main.py` 启动入口、服务生命周期、健康检查与根目录 `data/` 初始化。Runner 适配、MCP、RAG 和 Agent 执行接口尚未实现。
+项目目前处于开发初期，已实现 `main.py` 启动入口、服务生命周期、健康检查、独立日志模块与根目录 `data/` 初始化。Runner 适配、MCP、RAG 和 Agent 执行接口尚未实现。
 
 ## 快速启动
 
@@ -33,7 +33,13 @@ uv run main.py --host 0.0.0.0 --port 8080
 ```json
 {
   "paths": {"data_dir": "data"},
-  "server": {"host": "127.0.0.1", "port": 8000}
+  "server": {"host": "127.0.0.1", "port": 8000},
+  "logging": {
+    "level": "INFO",
+    "file_path": "data/logs/anyagent.log",
+    "max_bytes": 10485760,
+    "backup_count": 5
+  }
 }
 ```
 
@@ -45,7 +51,9 @@ uv run main.py --host 0.0.0.0 --port 8080
 python main.py
 ```
 
-按 `Ctrl+C` 停止服务。
+按 `Ctrl+C` 停止服务。应用和 Uvicorn 日志同时输出到控制台和 `data/logs/anyagent.log`，支持队列写入与文件轮转；退出时会清空队列。已有配置没有 `logging` 字段时使用默认日志参数，保留原文件。
+
+代码统一使用 `from anyagent.logger import logger` 获取日志入口。
 
 ## 设计方向
 
@@ -67,11 +75,14 @@ AnyAgent/
 │   ├── default.py       # 默认配置与 JSON 创建
 │   ├── load.py          # 当前配置加载、校验与路径解析
 │   └── __init__.py      # 导出共享 config
+├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
 ├── src/anyagent/
-│   └── bootstrap.py      # FastAPI 创建与生命周期
+│   ├── bootstrap.py     # FastAPI 创建与生命周期
+│   └── logger.py        # 控制台、队列写入与文件轮转
 ├── tests/               # 配置与路径行为测试
 ├── data/                # 运行数据，不提交 Git
-│   └── config.json      # 首次加载时自动创建的当前配置
+│   ├── config.json      # 首次加载时自动创建的当前配置
+│   └── logs/            # 应用和服务日志
 └── plans/               # 本地临时规划，不提交 Git
 ```
 
@@ -86,3 +97,15 @@ uv run pytest
 ```
 
 `uv.lock` 纳入版本控制；`plans/` 与 `data/` 保持本地使用。
+
+## 文档
+
+需要 Node.js 22+。所有文档依赖在 `docs/` 内管理：
+
+```bash
+cd docs
+npm ci
+npm run dev
+```
+
+运行 `npm run build` 构建，`npm run preview` 预览。GitHub Actions 会在 main 分支的文档变更、相关 PR 或手动触发时构建站点，并上传 `docs-site` 产物。使用说明见 `docs/guide/`，文档开发流程见 `docs/development.md`。
