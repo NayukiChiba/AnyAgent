@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 
 from configs import config
 
+from .logger import logger
+
 
 def create_app() -> FastAPI:
     @asynccontextmanager
@@ -15,10 +17,12 @@ def create_app() -> FastAPI:
         app.state.data_dir = config.paths.data_dir
         app.state.config = config
         app.state.ready = True
+        logger.info("Application ready")
         try:
             yield
         finally:
             app.state.ready = False
+            logger.info("Application shutdown complete")
 
     app = FastAPI(
         title="AnyAgent",
