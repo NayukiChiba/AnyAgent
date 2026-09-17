@@ -5,8 +5,8 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator
 
-from . import default, paths
-from .base import BaseSettings
+from anyagent.configs import default, paths
+from anyagent.configs.base import BaseSettings
 
 
 class PathSettings(BaseSettings):

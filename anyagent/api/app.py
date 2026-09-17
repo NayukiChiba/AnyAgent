@@ -6,8 +6,7 @@ from contextlib import AbstractAsyncContextManager
 from fastapi import FastAPI
 
 from anyagent import __version__
-
-from .routes.health import router as health_router
+from anyagent.api.routes.health import router as health_router
 
 
 def build_app(

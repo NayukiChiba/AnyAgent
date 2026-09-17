@@ -8,8 +8,8 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from . import default, paths
-from .models import CmdConfig, LoggingSettings
+from anyagent.configs import default, paths
+from anyagent.configs.models import CmdConfig, LoggingSettings
 
 logger = logging.getLogger(__name__)
 Model = TypeVar("Model", bound=BaseModel)

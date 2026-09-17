@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from . import paths
+from anyagent.configs import paths
 
 DEFAULT_CMD_CONFIG = {
     "paths": {"data_dir": paths.as_project_relative(paths.get_data_dir())},
