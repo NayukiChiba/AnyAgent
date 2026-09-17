@@ -15,46 +15,46 @@
 
 ## Commit 消息
 
-每条 commit 必须同时包含标题和正文，使用英文。遵循 Conventional Commits：
+每条 commit 必须同时包含标题和正文。只有 `type` 和 `scope` 使用英文，标题描述和正文均使用中文；文件名、命令和技术标识保留原样。遵循 Conventional Commits：
 
 ```text
-<type>(<scope>): <summary>
+<type>(<scope>): <中文改动描述>
 
-Why:
-Explain the problem or reason for this change.
+修改原因：
+说明本次修改要解决的问题。
 
-Changes:
-- Describe the concrete files, behavior, or rules changed.
+改动内容：
+- 说明具体修改的文件、行为或规范。
 
-Validation:
-- Record the checks actually run and their results.
+验证结果：
+- 记录实际执行的检查及结果。
 ```
 
-- 标题使用祈使句，简洁描述改动目的，建议不超过 72 个字符。
+- 标题使用中文动词短语，简洁描述改动目的，建议不超过 72 个字符。
 - `scope` 可省略；使用时选择具体模块，如 `config`、`startup`、`runner`、`mcp`、`rag`。
 - `type` 使用 `feat`、`fix`、`refactor`、`test`、`docs`、`build`、`ci` 或 `chore`。
-- 正文必须说明为什么修改、具体做了什么、如何验证；不能只重复标题或写“update files”。
+- 正文使用中文，必须说明为什么修改、具体做了什么、如何验证；不能只重复标题或写“更新文件”。
 - 正文中的文件、行为和验证结果必须与本次提交一致，不把后续计划写成已完成内容。
 - 只记录实际运行过的检查；未运行时说明原因，不把静态检查描述为启动或集成验证。
-- 破坏性变更使用 `!` 并在正文追加 `BREAKING CHANGE:`，说明影响和迁移方式。
+- 破坏性变更在标题的 `type`/`scope` 后使用 `!`，并在正文追加“不兼容变更：”，用中文说明影响和迁移方式。
 - 多行消息写入临时文件，通过 `git commit --file <path>` 提交，保留真实换行。
 
 示例：
 
 ```text
-feat(config): load runtime settings from JSON
+feat(config): 从 JSON 加载运行配置
 
-Why:
-Runtime paths and server defaults need one configurable source.
+修改原因：
+运行路径和服务默认值需要统一的配置来源。
 
-Changes:
-- Create default data/config.json through configs/default.py.
-- Load and validate settings through configs/load.py.
-- Resolve relative paths against the project root.
+改动内容：
+- 通过 configs/default.py 创建默认的 data/config.json。
+- 通过 configs/load.py 加载并校验当前配置。
+- 统一以项目根目录为基准解析相对路径。
 
-Validation:
-- Configuration tests passed.
-- Ruff lint and formatting checks passed.
+验证结果：
+- 配置测试通过。
+- Ruff 静态检查和格式检查通过。
 ```
 
 ## 提交前检查
