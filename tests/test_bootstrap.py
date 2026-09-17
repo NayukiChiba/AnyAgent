@@ -4,7 +4,7 @@ from anyagent.bootstrap import create_app
 from configs import config
 
 
-def test_src_consumes_shared_config():
+def test_application_consumes_shared_config():
     app = create_app()
     assert not app.state.ready
 

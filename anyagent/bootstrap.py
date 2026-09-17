@@ -1,12 +1,12 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from importlib.metadata import version
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from configs import config
 
+from . import __version__
 from .logger import logger
 
 
@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AnyAgent",
         description="An application platform for multiple Agent Runners.",
-        version=version("anyagent"),
+        version=__version__,
         lifespan=lifespan,
     )
     app.state.ready = False

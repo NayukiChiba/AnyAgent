@@ -13,6 +13,8 @@ uv sync --locked
 uv run main.py
 ```
 
+应用源码直接放在根目录 `anyagent/`，`uv sync` 只安装依赖，不打包安装 AnyAgent，也不生成项目的 `egg-info`。版本号由 `anyagent/__init__.py` 中的 `__version__` 提供。
+
 服务默认监听 `127.0.0.1:8000`。启动后可访问：
 
 - API 文档：<http://127.0.0.1:8000/docs>
@@ -73,7 +75,8 @@ AnyAgent/
 │   ├── load.py          # 当前配置加载、校验与路径解析
 │   └── __init__.py      # 导出共享 config
 ├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
-├── src/anyagent/
+├── anyagent/
+│   ├── __init__.py      # 模块入口与版本号
 │   ├── bootstrap.py     # FastAPI 创建与生命周期
 │   └── logger.py        # 控制台、队列写入与文件轮转
 ├── tests/               # 配置与路径行为测试
