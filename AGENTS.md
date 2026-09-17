@@ -75,3 +75,6 @@ feat(config): 从 JSON 加载运行配置
 - 平台管理的配置、密钥和运行数据统一保存到根目录 `data/`，不纳入版本控制。
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。
 - 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
+
+- 日志统一使用 `anyagent.logger`，日志路径和轮转参数来自共享配置；日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
+- 文档使用 VitePress，`package.json`、锁文件和依赖安装均在 `docs/` 内；修改文档需运行 `npm ci` 和 `npm run build`，不提交构建产物或缓存。
