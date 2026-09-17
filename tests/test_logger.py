@@ -3,11 +3,13 @@ import logging
 import pytest
 
 from anyagent.logger import LogManager, logger
+from configs import default
 from configs.load import LoggingSettings
 
 
 @pytest.fixture
-def log_settings(tmp_path):
+def log_settings(tmp_path, monkeypatch):
+    monkeypatch.setattr(default, "LOGS_DIR", tmp_path / "data/logs")
     settings = LoggingSettings(file_path=tmp_path / "data/logs/test.log")
     yield settings
     LogManager.shutdown()

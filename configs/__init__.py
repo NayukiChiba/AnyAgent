@@ -1,7 +1,28 @@
-"""Shared configuration loaded from the project's data directory."""
+"""Shared, independently loaded configurations under data/configs."""
 
-from .load import Config, ServerSettings, load_config
+from .load import (
+    CmdConfig,
+    LoggingSettings,
+    ServerSettings,
+    load_cmd_config,
+    load_config,
+    load_logging_config,
+    migrate_legacy_config,
+)
 
-config = load_config()
+migrate_legacy_config()
+cmd_config = load_cmd_config()
+logging_config = load_logging_config()
+config = cmd_config
 
-__all__ = ["Config", "ServerSettings", "config", "load_config"]
+__all__ = [
+    "CmdConfig",
+    "LoggingSettings",
+    "ServerSettings",
+    "cmd_config",
+    "config",
+    "load_cmd_config",
+    "load_config",
+    "load_logging_config",
+    "logging_config",
+]

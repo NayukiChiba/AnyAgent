@@ -4,7 +4,7 @@ import uvicorn
 
 from anyagent.bootstrap import create_app
 from anyagent.logger import LogManager, logger
-from configs import ServerSettings, config
+from configs import ServerSettings, config, logging_config
 
 
 def main() -> None:
@@ -20,7 +20,7 @@ def main() -> None:
     except ValueError as error:
         parser.error(str(error))
 
-    LogManager.configure(config.logging)
+    LogManager.configure(logging_config)
     try:
         logger.info("Starting AnyAgent on %s:%s", server.host, server.port)
         uvicorn.run(
@@ -28,7 +28,7 @@ def main() -> None:
             host=server.host,
             port=server.port,
             log_config=None,
-            log_level=config.logging.level.lower(),
+            log_level=logging_config.level.lower(),
         )
     except Exception:
         logger.exception("Server execution failed")
