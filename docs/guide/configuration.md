@@ -7,7 +7,7 @@
 | `cmd_config.json` | 主配置：数据路径、服务监听参数 | `cmd_config`，别名 `config` |
 | `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 
-根目录 `configs/default.py` 集中定义默认值和文件路径，`load.py` 提供独立加载与校验，`__init__.py` 导出共享对象。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
+根目录 `configs/default.py` 定义默认值并创建 JSON，`paths.py` 集中定义路径和文件命名规则、解析与边界校验，`load.py` 提供独立配置加载与模型校验，`__init__.py` 导出共享对象。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
 
 ```python
 from configs import cmd_config, logging_config
@@ -43,6 +43,17 @@ log_file = logging_config.file_path
 ```
 
 相对路径以项目根目录为基准解析。数据路径必须位于 data/ 内，日志文件必须位于 data/logs/ 内，导出的路径为绝对路径。
+
+需要获取运行文件或目录时，统一使用路径模块：
+
+```python
+from configs import paths
+
+config_file = paths.get_config_path("cmd_config")
+logs_dir = paths.get_logs_dir()
+```
+
+`get_project_root()`、`get_data_dir()`、`get_configs_dir()` 和 `get_logs_dir()` 返回固定部署目录；`get_log_path()` 获取默认日志文件，也可传入配置路径进行校验。当前使用的配置数据目录和日志文件分别以 `config.paths.data_dir` 和 `logging_config.file_path` 为准。旧配置和备份路径也由 paths 模块提供，其他代码不硬编码或自行拼接运行路径。路径函数只计算和校验，不创建目录或文件。
 
 ## 独立扩展配置
 
