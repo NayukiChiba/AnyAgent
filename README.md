@@ -26,13 +26,18 @@ uv run main.py
 uv run main.py --host 0.0.0.0 --port 8080
 ```
 
-启动默认值与路径配置集中在 `configs/app.toml`，不在启动代码中指定。路径相对于项目根目录解析，命令行的 `--host`、`--port` 覆盖配置文件中的值。也可选择其他配置文件：
+当前配置保存在 `data/config.json`。首次启动时，根目录 `configs/default.py` 创建默认 JSON；`configs/load.py` 加载并校验配置，`configs/__init__.py` 导出共享的 `config`，启动入口和 `src` 模块通过 `from configs import config` 使用。
 
-```bash
-uv run main.py --config configs/app.toml
+可以停止服务后修改 `data/config.json`，再重新启动。配置示例：
+
+```json
+{
+  "paths": {"data_dir": "data"},
+  "server": {"host": "127.0.0.1", "port": 8000}
+}
 ```
 
-相对的 `--config` 文件名也以项目根目录为基准；配置缺失或无效时启动失败，不会静默回退。
+路径统一相对于项目根目录解析，数据路径必须位于根目录 `data/` 内。配置缺失时创建默认值；JSON 编码、格式或内容无效时，原文件备份为 `data/config.json.<时间戳>.bak`，再创建默认配置。读写权限等文件系统错误直接报告。命令行的 `--host`、`--port` 只覆盖本次启动值，不修改 JSON。
 
 已安装项目依赖时，也可以使用虚拟环境中的 Python 直接启动：
 
@@ -59,18 +64,18 @@ AnyAgent/
 ├── pyproject.toml       # 项目元数据与依赖
 ├── uv.lock              # 依赖锁文件
 ├── configs/
-│   └── app.toml          # 路径与服务启动默认值
+│   ├── default.py       # 默认配置与 JSON 创建
+│   ├── load.py          # 当前配置加载、校验与路径解析
+│   └── __init__.py      # 导出共享 config
 ├── src/anyagent/
-│   ├── configs/          # 配置校验与统一路径解析
 │   └── bootstrap.py      # FastAPI 创建与生命周期
 ├── tests/               # 配置与路径行为测试
-├── data/                # 启动时创建，运行数据，不提交 Git
+├── data/                # 运行数据，不提交 Git
+│   └── config.json      # 首次加载时自动创建的当前配置
 └── plans/               # 本地临时规划，不提交 Git
 ```
 
-`data/` 的位置由 `configs/app.toml` 的 `paths.data_dir` 配置决定，默认是项目根目录的 `data/`，不受启动时的工作目录影响。配置加载统一负责路径解析，并拒绝指向项目根目录外的数据路径。其他模块使用已经解析的路径，不自行拼接目录名。
-
-`configs/` 保存纳入版本控制的启动配置，不保存密钥或运行时生成文件。后续动态配置、数据库、知识索引、文件和 Runner 状态统一放入 `data/`。
+根目录 `configs/` 只保存 Python 配置代码，配置 JSON 只保存在 `data/`。其他模块使用共享配置中的已解析路径，不自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
 
 ## 开发检查
 

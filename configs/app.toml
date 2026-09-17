@@ -1,7 +1,0 @@
-# Paths are relative to the project root, independent of the working directory.
-[paths]
-data_dir = "data"
-
-[server]
-host = "127.0.0.1"
-port = 8000

@@ -1,17 +1,19 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from configs import config
 
-def create_app(data_dir: Path) -> FastAPI:
+
+def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        data_dir.mkdir(parents=True, exist_ok=True)
-        app.state.data_dir = data_dir
+        config.paths.data_dir.mkdir(parents=True, exist_ok=True)
+        app.state.data_dir = config.paths.data_dir
+        app.state.config = config
         app.state.ready = True
         try:
             yield
