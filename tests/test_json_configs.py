@@ -1,9 +1,10 @@
 import json
 
 import pytest
-from pydantic import BaseModel, ConfigDict
+from pydantic import Field
 
 from anyagent.configs import (
+    BaseSettings,
     default,
     load_cmd_config,
     load_config,
@@ -119,8 +120,7 @@ def test_invalid_log_path_only_recovers_logging_config(config_dir):
 
 
 def test_independent_extension_config(config_dir):
-    class ExtensionConfig(BaseModel):
-        model_config = ConfigDict(extra="forbid")
+    class ExtensionConfig(BaseSettings):
         enabled: bool
 
     defaults = {"enabled": False}
@@ -218,3 +218,13 @@ def test_corrupt_legacy_is_backed_up_before_defaults(config_dir):
     migrate_legacy_config()
     assert load_cmd_config().server.port == 8000
     assert next(config_dir.glob("config.json.*.bak")).read_bytes() == b"broken"
+
+
+def test_invalid_extension_defaults_do_not_create_a_config_file(config_dir):
+    class ExtensionConfig(BaseSettings):
+        limit: int = Field(default=0, ge=1)
+
+    with pytest.raises(ValueError):
+        load_config("extension_config", ExtensionConfig, {})
+
+    assert not config_dir.exists()

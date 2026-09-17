@@ -5,7 +5,7 @@ import sys
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
 
-from anyagent.configs.load import LoggingSettings
+from anyagent.configs import LoggingSettings
 
 logger = logging.getLogger("anyagent")
 

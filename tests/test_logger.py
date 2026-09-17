@@ -2,8 +2,7 @@ import logging
 
 import pytest
 
-from anyagent.configs import paths
-from anyagent.configs.load import LoggingSettings
+from anyagent.configs import LoggingSettings, paths
 from anyagent.utils.logger import LogManager, logger
 
 

@@ -39,6 +39,8 @@ uv run main.py --host 0.0.0.0 --port 8080
 }
 ```
 
+配置值模型统一继承项目自己的 `BaseSettings`，禁止未知字段和字段重新赋值，并校验默认值；JSON 读写与恢复由 loader 负责。
+
 日志参数单独保存在 `data/configs/logging_config.json`，其他模块也可通过 `load_config(名称, 校验模型, 默认值)` 使用独立配置文件。
 
 
@@ -74,6 +76,8 @@ AnyAgent/
 ├── anyagent/
 │   ├── __init__.py      # 模块入口与版本号
 │   ├── configs/
+│   │   ├── base.py      # 配置值模型的共享校验规则
+│   │   ├── models.py    # 主配置、路径、服务和日志模型
 │   │   ├── default.py   # 默认配置与 JSON 创建
 │   │   ├── load.py      # 当前配置加载与模型校验
 │   │   ├── paths.py     # 所有运行路径的获取与校验

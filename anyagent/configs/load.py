@@ -4,59 +4,15 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel
 
 from . import default, paths
+from .models import CmdConfig, LoggingSettings
 
 logger = logging.getLogger(__name__)
 Model = TypeVar("Model", bound=BaseModel)
-
-
-class PathSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    data_dir: Path
-
-    @field_validator("data_dir")
-    @classmethod
-    def resolve_data_dir(cls, value: Path) -> Path:
-        return paths.resolve_data_path(value)
-
-
-class ServerSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    host: str = Field(min_length=1)
-    port: int = Field(ge=1, le=65535)
-
-
-class LoggingSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
-
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = (
-        default.DEFAULT_LOGGING_CONFIG["level"]
-    )
-    file_path: Path = default.DEFAULT_LOGGING_CONFIG["file_path"]
-    max_bytes: int = Field(
-        default.DEFAULT_LOGGING_CONFIG["max_bytes"], ge=1, strict=True
-    )
-    backup_count: int = Field(
-        default.DEFAULT_LOGGING_CONFIG["backup_count"], ge=1, strict=True
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def resolve_log_path(cls, value: Path) -> Path:
-        return paths.get_log_path(value)
-
-
-class CmdConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    paths: PathSettings
-    server: ServerSettings
 
 
 def _backup_config(path: Path) -> Path:
