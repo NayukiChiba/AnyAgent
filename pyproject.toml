@@ -1,6 +1,6 @@
 # --------------- Ruff 配置 ---------------
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
@@ -41,19 +41,28 @@ torchaudio = { index = "pytorch-cu128-original" }
 
 # --------------- 项目信息配置 ---------------
 [project]
-name = "templates" # 这里需要设置为你的项目名称，通常与包名相同
+name = "anyagent" # 这里需要设置为你的项目名称，通常与包名相同
 version = "0.1.0"
-description = "项目模板" # 这里需要设置为你的项目描述，简要说明项目的功能和用途
-requires-python = ">=3.11"
+description = "连接多个Agent Runner后端，集成多Agent" # 这里需要设置为你的项目描述，简要说明项目的功能和用途
+requires-python = ">=3.12"
 readme = "README.md"
-license = { text = "MIT" }
 authors = [
     { name = "NayukiMeko" },
 ]
 keywords = [] # 这里可以添加一些关键词，帮助用户搜索到你的项目 
 
-# 运行时依赖（留空，按项目需要添加）
-dependencies = []
+# 运行时依赖
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 # 可选依赖组（兼容 pip install ".[dev]" 方式安装）
 [project.optional-dependencies]
