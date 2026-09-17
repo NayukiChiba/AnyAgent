@@ -1,6 +1,6 @@
 import asyncio
 
-from anyagent.bootstrap import create_app
+from anyagent.runtime.bootstrap import create_app
 from configs import config
 
 

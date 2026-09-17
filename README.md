@@ -52,7 +52,7 @@ python main.py
 
 按 `Ctrl+C` 停止服务。应用和 Uvicorn 日志同时输出到控制台和 `data/logs/anyagent.log`，支持队列写入与文件轮转；退出时会清空队列。日志参数从独立的 `logging_config` 获取。
 
-代码统一使用 `from anyagent.logger import logger` 获取日志入口。
+外层模块使用 `from anyagent.utils.logger import logger` 获取日志入口；核心业务代码使用标准库日志接口，由启动时的统一日志配置接管输出。
 
 ## 设计方向
 
@@ -77,8 +77,14 @@ AnyAgent/
 ├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
 ├── anyagent/
 │   ├── __init__.py      # 模块入口与版本号
-│   ├── bootstrap.py     # FastAPI 创建与生命周期
-│   └── logger.py        # 控制台、队列写入与文件轮转
+│   ├── api/
+│   │   ├── app.py       # FastAPI 构造与路由注册
+│   │   └── routes/
+│   │       └── health.py # 健康检查 HTTP 接口
+│   ├── runtime/
+│   │   └── bootstrap.py # 配置装配、数据初始化与生命周期
+│   └── utils/
+│       └── logger.py    # 控制台、队列写入与文件轮转
 ├── tests/               # 配置与路径行为测试
 ├── data/                # 运行数据，不提交 Git
 │   ├── configs/         # 按类型组织的运行配置
@@ -89,6 +95,8 @@ AnyAgent/
 ```
 
 根目录 `configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。其他模块使用共享配置中的已解析路径，不自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
+
+后续业务实现放在 `anyagent/core/`：领域模型、端口、应用服务和 pipeline 只依赖内层契约；Runner、Provider、MCP 和检索的具体实现放在 `anyagent/adapters/`，数据库与文件实现放在 `anyagent/infrastructure/`。`runtime/` 组装依赖并注入配置，`api/` 处理 HTTP；核心业务不导入外层实现或全局配置。目录随功能创建，当前尚未建立这些 Agent 模块。
 
 ## 开发检查
 

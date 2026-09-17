@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from anyagent.logger import LogManager, logger
+from anyagent.utils.logger import LogManager, logger
 from configs import default
 from configs.load import LoggingSettings
 
