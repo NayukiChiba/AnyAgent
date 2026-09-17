@@ -1,7 +1,7 @@
 import asyncio
 
+from anyagent.configs import config
 from anyagent.runtime.bootstrap import create_app
-from configs import config
 
 
 def test_application_consumes_shared_config():

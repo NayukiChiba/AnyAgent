@@ -2,9 +2,9 @@ import argparse
 
 import uvicorn
 
+from anyagent.configs import ServerSettings, config, logging_config
 from anyagent.runtime.bootstrap import create_app
 from anyagent.utils.logger import LogManager, logger
-from configs import ServerSettings, config, logging_config
 
 
 def main() -> None:

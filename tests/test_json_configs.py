@@ -3,8 +3,14 @@ import json
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from configs import default, load_cmd_config, load_config, load_logging_config, paths
-from configs.load import migrate_legacy_config
+from anyagent.configs import (
+    default,
+    load_cmd_config,
+    load_config,
+    load_logging_config,
+    paths,
+)
+from anyagent.configs.load import migrate_legacy_config
 
 
 @pytest.fixture

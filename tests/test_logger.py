@@ -2,9 +2,9 @@ import logging
 
 import pytest
 
+from anyagent.configs import paths
+from anyagent.configs.load import LoggingSettings
 from anyagent.utils.logger import LogManager, logger
-from configs import paths
-from configs.load import LoggingSettings
 
 
 @pytest.fixture

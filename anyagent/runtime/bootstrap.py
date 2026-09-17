@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from anyagent.api.app import build_app
+from anyagent.configs import config
 from anyagent.utils.logger import logger
-from configs import config
 
 
 def create_app() -> FastAPI:

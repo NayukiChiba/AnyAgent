@@ -28,7 +28,7 @@ uv run main.py
 uv run main.py --host 0.0.0.0 --port 8080
 ```
 
-当前配置保存在 `data/configs/cmd_config.json`。首次启动时，根目录 `configs/default.py` 按类型创建默认 JSON；`configs/load.py` 提供独立加载和校验，`configs/__init__.py` 导出 `cmd_config`、`logging_config`，并以 `config` 作为主配置别名。
+当前配置保存在 `data/configs/cmd_config.json`。首次启动时，`anyagent/configs/default.py` 按类型创建默认 JSON；`anyagent/configs/load.py` 提供独立加载和校验，`anyagent/configs/__init__.py` 导出 `cmd_config`、`logging_config`，并以 `config` 作为主配置别名。
 
 可以停止服务后修改 `data/configs/cmd_config.json`，再重新启动。配置示例：
 
@@ -70,14 +70,14 @@ AnyAgent/
 ├── main.py              # 项目启动入口
 ├── pyproject.toml       # 项目元数据与依赖
 ├── uv.lock              # 依赖锁文件
-├── configs/
-│   ├── default.py       # 默认配置与 JSON 创建
-│   ├── load.py          # 当前配置加载与模型校验
-│   ├── paths.py         # 统一获取、解析与校验所有运行路径
-│   └── __init__.py      # 导出共享 config
 ├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
 ├── anyagent/
 │   ├── __init__.py      # 模块入口与版本号
+│   ├── configs/
+│   │   ├── default.py   # 默认配置与 JSON 创建
+│   │   ├── load.py      # 当前配置加载与模型校验
+│   │   ├── paths.py     # 所有运行路径的获取与校验
+│   │   └── __init__.py  # 导出共享配置与 paths 模块
 │   ├── api/
 │   │   ├── app.py       # FastAPI 构造与路由注册
 │   │   └── routes/
@@ -95,7 +95,7 @@ AnyAgent/
 └── plans/               # 本地临时规划，不提交 Git
 ```
 
-根目录 `configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。所有目录、文件名规则与路径校验集中在 `configs/paths.py`；其他模块通过 `from configs import paths` 获取路径，或使用共享配置中的已解析路径，不硬编码或自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
+`anyagent/configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。所有目录、文件名规则与路径校验集中在 `anyagent/configs/paths.py`；其他模块通过 `from anyagent.configs import paths` 获取路径，或使用共享配置中的已解析路径，不硬编码或自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
 
 后续业务实现放在 `anyagent/core/`：领域模型、端口、应用服务和 pipeline 只依赖内层契约；Runner、Provider、MCP 和检索的具体实现放在 `anyagent/adapters/`，数据库与文件实现放在 `anyagent/infrastructure/`。`runtime/` 组装依赖并注入配置，`api/` 处理 HTTP；核心业务不导入外层实现或全局配置。目录随功能创建，当前尚未建立这些 Agent 模块。
 
