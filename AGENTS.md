@@ -42,14 +42,14 @@ Validation:
 示例：
 
 ```text
-feat(config): load startup settings from TOML
+feat(config): load runtime settings from JSON
 
 Why:
 Runtime paths and server defaults need one configurable source.
 
 Changes:
-- Add configs/app.toml for path and server values.
-- Load and validate settings through anyagent.configs.
+- Create default data/config.json through configs/default.py.
+- Load and validate settings through configs/load.py.
 - Resolve relative paths against the project root.
 
 Validation:
@@ -69,7 +69,9 @@ Validation:
 ## 项目约定
 
 - 项目通过根目录 `main.py` 启动。
-- 路径值和启动默认值集中在 `configs/`；Python 中的配置加载和路径解析集中在 `src/anyagent/configs/`，其他模块使用解析后的配置。
-- 平台管理的运行数据默认统一保存到根目录 `data/`；版本化启动配置不保存密钥或运行时生成文件。
+- 根目录 `configs/` 保存 Python 配置模块：`default.py` 创建默认配置，`load.py` 加载当前配置，`__init__.py` 导出共享 `config`；启动入口和 `src` 直接从 `configs` 获取配置。
+- 实际配置只使用 JSON，保存于 `data/config.json`，不在根目录 `configs/` 保存 TOML 或 JSON 配置文件。路径解析统一在 `configs` 模块完成。
+- 配置缺失时创建默认 JSON；内容无法加载时先在 `data/` 备份原文件再恢复默认值，文件系统权限错误不得作为格式错误覆盖处理。
+- 平台管理的配置、密钥和运行数据统一保存到根目录 `data/`，不纳入版本控制。
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。
 - 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
