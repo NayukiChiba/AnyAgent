@@ -3,19 +3,19 @@ import json
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from configs import default, load_cmd_config, load_config, load_logging_config
+from configs import default, load_cmd_config, load_config, load_logging_config, paths
 from configs.load import migrate_legacy_config
 
 
 @pytest.fixture
 def config_dir(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
-    monkeypatch.setattr(default, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(default, "DATA_DIR", data_dir)
-    monkeypatch.setattr(default, "LOGS_DIR", data_dir / "logs")
-    monkeypatch.setattr(default, "CONFIGS_DIR", data_dir / "configs")
-    monkeypatch.setattr(default, "LEGACY_CONFIG_FILE", data_dir / "config.json")
-    return default.CONFIGS_DIR
+    monkeypatch.setattr(paths, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(paths, "DATA_DIR", data_dir)
+    monkeypatch.setattr(paths, "LOGS_DIR", data_dir / "logs")
+    monkeypatch.setattr(paths, "CONFIGS_DIR", data_dir / "configs")
+    monkeypatch.setattr(paths, "LEGACY_CONFIG_FILE", data_dir / "config.json")
+    return paths.CONFIGS_DIR
 
 
 def test_missing_configs_create_separate_json_files(config_dir):
@@ -23,7 +23,7 @@ def test_missing_configs_create_separate_json_files(config_dir):
     logs = load_logging_config()
 
     assert cmd.paths.data_dir == config_dir.parent
-    assert logs.file_path == default.LOGS_DIR / "anyagent.log"
+    assert logs.file_path == paths.LOGS_DIR / "anyagent.log"
     assert (
         json.loads((config_dir / "cmd_config.json").read_text())
         == default.DEFAULT_CMD_CONFIG
@@ -32,7 +32,7 @@ def test_missing_configs_create_separate_json_files(config_dir):
         json.loads((config_dir / "logging_config.json").read_text())
         == default.DEFAULT_LOGGING_CONFIG
     )
-    assert not default.LEGACY_CONFIG_FILE.exists()
+    assert not paths.LEGACY_CONFIG_FILE.exists()
 
 
 def test_valid_config_is_loaded_without_rewriting(config_dir):
@@ -107,7 +107,7 @@ def test_invalid_log_path_only_recovers_logging_config(config_dir):
     values["file_path"] = "data/outside.log"
     path.write_text(json.dumps(values))
 
-    assert load_logging_config().file_path == default.LOGS_DIR / "anyagent.log"
+    assert load_logging_config().file_path == paths.LOGS_DIR / "anyagent.log"
     assert cmd_path.read_bytes() == original_cmd
     assert len(list(config_dir.glob("logging_config.json.*.bak"))) == 1
 
@@ -130,33 +130,73 @@ def test_independent_extension_config(config_dir):
 )
 def test_config_name_cannot_leave_configs_directory(config_dir, name):
     with pytest.raises(ValueError):
-        default.get_config_path(name)
+        paths.get_config_path(name)
     assert not config_dir.exists()
 
 
+@pytest.mark.parametrize("resolver", [paths.resolve_data_path, paths.get_log_path])
+@pytest.mark.parametrize("absolute", [False, True])
+def test_runtime_paths_reject_escape(config_dir, resolver, absolute):
+    value = paths.PROJECT_ROOT / "outside" if absolute else "data/../outside"
+    with pytest.raises(ValueError):
+        resolver(value)
+    assert not config_dir.exists()
+
+
+def test_config_symlink_cannot_modify_file_outside_configs(config_dir):
+    outside = paths.PROJECT_ROOT / "outside.json"
+    outside.write_text('{"keep":true}')
+    config_dir.mkdir(parents=True)
+    (config_dir / "cmd_config.json").symlink_to(outside)
+
+    with pytest.raises(ValueError):
+        load_cmd_config()
+
+    assert outside.read_text() == '{"keep":true}'
+    assert not list(config_dir.glob("*.bak"))
+
+
+def test_log_symlink_cannot_leave_logs_directory(config_dir):
+    outside = paths.DATA_DIR / "outside.log"
+    paths.get_logs_dir().mkdir(parents=True)
+    outside.write_text("Keep this file")
+    logfile = paths.get_logs_dir() / "linked.log"
+    logfile.symlink_to(outside)
+
+    with pytest.raises(ValueError):
+        paths.get_log_path(logfile)
+
+    assert outside.read_text() == "Keep this file"
+
+
+def test_log_filename_cannot_be_the_logs_directory(config_dir):
+    with pytest.raises(ValueError):
+        paths.get_log_path(paths.get_logs_dir())
+
+
 def test_legacy_migration_preserves_values_and_original_bytes(config_dir):
-    default.DATA_DIR.mkdir()
+    paths.DATA_DIR.mkdir()
     values = {
         "paths": {"data_dir": "data/custom"},
         "server": {"host": "localhost", "port": 9000},
         "logging": {**default.DEFAULT_LOGGING_CONFIG, "level": "DEBUG"},
     }
     original = json.dumps(values).encode()
-    default.LEGACY_CONFIG_FILE.write_bytes(original)
+    paths.LEGACY_CONFIG_FILE.write_bytes(original)
 
     migrate_legacy_config()
 
     assert load_cmd_config().server.port == 9000
     assert load_logging_config().level == "DEBUG"
     assert "logging" not in json.loads((config_dir / "cmd_config.json").read_text())
-    assert not default.LEGACY_CONFIG_FILE.exists()
+    assert not paths.LEGACY_CONFIG_FILE.exists()
     assert next(config_dir.glob("config.json.*.bak")).read_bytes() == original
 
 
 def test_legacy_migration_keeps_newer_config_files(config_dir):
     cmd = default.create_default_config()
     original = cmd.read_bytes()
-    default.LEGACY_CONFIG_FILE.write_text(
+    paths.LEGACY_CONFIG_FILE.write_text(
         '{"paths":{"data_dir":"data"},"server":{"host":"localhost","port":9000}}'
     )
     migrate_legacy_config()
@@ -167,8 +207,8 @@ def test_legacy_migration_keeps_newer_config_files(config_dir):
 
 
 def test_corrupt_legacy_is_backed_up_before_defaults(config_dir):
-    default.DATA_DIR.mkdir()
-    default.LEGACY_CONFIG_FILE.write_bytes(b"broken")
+    paths.DATA_DIR.mkdir()
+    paths.LEGACY_CONFIG_FILE.write_bytes(b"broken")
     migrate_legacy_config()
     assert load_cmd_config().server.port == 8000
     assert next(config_dir.glob("config.json.*.bak")).read_bytes() == b"broken"

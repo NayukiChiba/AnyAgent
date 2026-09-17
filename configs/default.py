@@ -1,22 +1,17 @@
-"""Default configuration values and centralized runtime configuration paths."""
+"""Default configuration values and exclusive JSON creation."""
 
 import json
-import re
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-CONFIGS_DIR = DATA_DIR / "configs"
-LEGACY_CONFIG_FILE = DATA_DIR / "config.json"
-LOGS_DIR = DATA_DIR / "logs"
+from . import paths
 
 DEFAULT_CMD_CONFIG = {
-    "paths": {"data_dir": "data"},
+    "paths": {"data_dir": paths.as_project_relative(paths.get_data_dir())},
     "server": {"host": "127.0.0.1", "port": 8000},
 }
 DEFAULT_LOGGING_CONFIG = {
     "level": "INFO",
-    "file_path": "data/logs/anyagent.log",
+    "file_path": paths.as_project_relative(paths.get_log_path()),
     "max_bytes": 10485760,
     "backup_count": 5,
 }
@@ -24,28 +19,6 @@ DEFAULT_CONFIGS = {
     "cmd_config": DEFAULT_CMD_CONFIG,
     "logging_config": DEFAULT_LOGGING_CONFIG,
 }
-
-
-def get_config_path(name: str) -> Path:
-    """Resolve a configuration name to a JSON file under data/configs.
-
-    Args:
-        name: Lowercase configuration name without an extension or directories.
-
-    Returns:
-        The configuration filename.
-
-    Raises:
-        ValueError: The name or resolved path leaves the configuration directory.
-    """
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
-        raise ValueError(
-            "Configuration names must use lowercase letters, digits and underscores"
-        )
-    path = CONFIGS_DIR / f"{name}.json"
-    if not path.resolve().is_relative_to(CONFIGS_DIR.resolve()):
-        raise ValueError("Configuration files must stay inside data/configs")
-    return path
 
 
 def create_default_config(name: str = "cmd_config", values: dict | None = None) -> Path:
@@ -63,9 +36,9 @@ def create_default_config(name: str = "cmd_config", values: dict | None = None) 
         ValueError: The configuration name is invalid.
         KeyError: An unknown configuration name has no supplied defaults.
     """
-    path = get_config_path(name)
+    path = paths.get_config_path(name)
     values = DEFAULT_CONFIGS[name] if values is None else values
-    CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as file:
         json.dump(values, file, ensure_ascii=False, indent=2)
         file.write("\n")

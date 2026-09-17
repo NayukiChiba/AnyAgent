@@ -72,7 +72,8 @@ AnyAgent/
 ├── uv.lock              # 依赖锁文件
 ├── configs/
 │   ├── default.py       # 默认配置与 JSON 创建
-│   ├── load.py          # 当前配置加载、校验与路径解析
+│   ├── load.py          # 当前配置加载与模型校验
+│   ├── paths.py         # 统一获取、解析与校验所有运行路径
 │   └── __init__.py      # 导出共享 config
 ├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
 ├── anyagent/
@@ -94,7 +95,7 @@ AnyAgent/
 └── plans/               # 本地临时规划，不提交 Git
 ```
 
-根目录 `configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。其他模块使用共享配置中的已解析路径，不自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
+根目录 `configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。所有目录、文件名规则与路径校验集中在 `configs/paths.py`；其他模块通过 `from configs import paths` 获取路径，或使用共享配置中的已解析路径，不硬编码或自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
 
 后续业务实现放在 `anyagent/core/`：领域模型、端口、应用服务和 pipeline 只依赖内层契约；Runner、Provider、MCP 和检索的具体实现放在 `anyagent/adapters/`，数据库与文件实现放在 `anyagent/infrastructure/`。`runtime/` 组装依赖并注入配置，`api/` 处理 HTTP；核心业务不导入外层实现或全局配置。目录随功能创建，当前尚未建立这些 Agent 模块。
 

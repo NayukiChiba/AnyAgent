@@ -1,5 +1,6 @@
 """Shared, independently loaded configurations under data/configs."""
 
+from . import paths
 from .load import (
     CmdConfig,
     LoggingSettings,
@@ -25,4 +26,5 @@ __all__ = [
     "load_config",
     "load_logging_config",
     "logging_config",
+    "paths",
 ]
