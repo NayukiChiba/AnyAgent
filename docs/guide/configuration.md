@@ -1,51 +1,76 @@
 # 配置管理
 
-实际配置保存在根目录 `data/config.json`，不提交 Git。根目录 `configs/` 只保存 Python 配置代码：
+运行配置按类型组织在根目录 `data/configs/`，不提交 Git：
 
-| 模块 | 职责 |
-| --- | --- |
-| `default.py` | 定义默认值和统一路径，创建默认 JSON |
-| `load.py` | 加载、校验和解析当前配置 |
-| `__init__.py` | 导出共享 `config` |
+| 文件 | 内容 | 导出对象 |
+| --- | --- | --- |
+| `cmd_config.json` | 主配置：数据路径、服务监听参数 | `cmd_config`，别名 `config` |
+| `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 
-启动入口和 `src` 模块使用同一份配置：
+根目录 `configs/default.py` 集中定义默认值和文件路径，`load.py` 提供独立加载与校验，`__init__.py` 导出共享对象。启动入口和 src 模块直接获取所需配置：
 
 ```python
-from configs import config
+from configs import cmd_config, logging_config
 
-host = config.server.host
-log_file = config.logging.file_path
+host = cmd_config.server.host
+log_file = logging_config.file_path
 ```
 
-导入模块时加载配置，修改 JSON 后需要重启服务。配置对象不可直接修改。
+模块导入时加载当前配置，修改 JSON 后需要重启服务。共享配置对象不可直接修改。
 
-## 配置示例
+## 主配置
+
+`data/configs/cmd_config.json`：
 
 ```json
 {
-  "paths": {
-    "data_dir": "data"
-  },
-  "server": {
-    "host": "127.0.0.1",
-    "port": 8000
-  },
-  "logging": {
-    "level": "INFO",
-    "file_path": "data/logs/anyagent.log",
-    "max_bytes": 10485760,
-    "backup_count": 5
-  }
+  "paths": {"data_dir": "data"},
+  "server": {"host": "127.0.0.1", "port": 8000}
 }
 ```
 
-相对路径以项目根目录为基准解析。数据路径必须位于 `data/` 内，日志文件必须位于 `data/logs/` 内；解析后导出的路径为绝对路径。
+## 日志配置
+
+`data/configs/logging_config.json`：
+
+```json
+{
+  "level": "INFO",
+  "file_path": "data/logs/anyagent.log",
+  "max_bytes": 10485760,
+  "backup_count": 5
+}
+```
+
+相对路径以项目根目录为基准解析。数据路径必须位于 data/ 内，日志文件必须位于 data/logs/ 内，导出的路径为绝对路径。
+
+## 独立扩展配置
+
+新增配置类型通过文件名、校验模型和独立默认值接入，不往 cmd_config 添加其他应用模块的全部配置。示例：
+
+```python
+from pydantic import BaseModel
+from configs import load_config
+
+
+class FeatureConfig(BaseModel):
+    enabled: bool
+
+
+feature_config = load_config("feature_config", FeatureConfig, {"enabled": False})
+```
+
+该调用仅加载或创建 `data/configs/feature_config.json`。名称使用小写字母、数字及下划线，不包含扩展名或目录。后续 MCP、RAG、Runner 配置采用同样方式按职责分文件；当前不预先创建这些功能的空配置。
 
 ## 缺失与无效配置
 
-- 文件缺失时自动创建默认 JSON。
-- 编码、JSON 格式、配置字段或路径无效时，先备份到 `data/config.json.<时间戳>.bak`，再创建默认配置。
-- 文件读取、备份和创建过程中出现权限等文件系统错误时，直接报告错误。
-- 已有 JSON 未包含 `logging` 时，加载默认日志参数，保留原文件和已有服务配置。
+- 某个文件缺失时，只创建该类型的默认 JSON。
+- 编码、格式、字段或路径无效时，先备份为 `data/configs/<文件名>.<时间戳>.bak`，再恢复该类型默认值，不修改其他文件。
+- 读取、备份或创建过程中的文件系统权限错误直接报告。
+- 开发者传入的默认值无效时直接报错，不据此覆盖现有配置。
 
-未知字段会视为无效配置。停止服务后修改配置，确认字段名和数值正确，再重新启动。
+## 旧配置迁移
+
+首次加载发现 `data/config.json` 时，将路径和服务参数迁移到 cmd_config.json，将 logging 内容拆分到 logging_config.json。旧配置没有日志字段时使用日志默认值。
+
+已有新配置文件优先，迁移不覆盖其内容。完成后旧文件原样备份在 `data/configs/config.json.<时间戳>.bak`。旧文件内容无法加载时也先备份，再分别创建缺失的默认文件；发生权限等文件系统错误时保留错误并中止。再次启动不会重复迁移已归档的旧文件。

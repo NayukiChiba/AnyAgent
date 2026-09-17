@@ -20,7 +20,7 @@ except Exception:
 
 通过 `main.py` 启动时，日志同时输出到控制台和 `data/logs/anyagent.log`，格式包含时间、级别、模块名和源码位置。应用日志、向上传播的标准 `logging` 日志及 Uvicorn 服务和访问日志统一进入写入队列。
 
-文件参数来自 `data/config.json` 的 `logging` 字段：
+文件参数来自 `data/configs/logging_config.json`：
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
@@ -33,6 +33,6 @@ except Exception:
 
 ## 生命周期
 
-`LogManager.configure(config.logging)` 在服务启动前配置输出；`LogManager.shutdown()` 在退出时清空队列并关闭本模块的处理器。重复配置会替换本模块的输出处理器，避免重复写入，其他模块安装的处理器保持原样。
+`LogManager.configure(logging_config)` 在服务启动前配置输出；`LogManager.shutdown()` 在退出时清空队列并关闭本模块的处理器。重复配置会替换本模块的输出处理器，避免重复写入，其他模块安装的处理器保持原样。
 
 直接调用 `create_app()` 时，宿主程序负责配置和关闭日志。日志文件属于运行数据，不提交 Git。迁移时可根据需要保留或清理历史日志。

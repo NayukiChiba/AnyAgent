@@ -13,7 +13,7 @@ uv sync --locked
 uv run main.py
 ```
 
-首次启动会创建 `data/config.json`，服务默认监听 `127.0.0.1:8000`，日志写入 `data/logs/anyagent.log`。
+首次启动会创建 `data/configs/cmd_config.json`，服务默认监听 `127.0.0.1:8000`，日志写入 `data/logs/anyagent.log`。
 
 访问 <http://127.0.0.1:8000/docs> 查看交互式 API 文档。
 
