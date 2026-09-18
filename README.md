@@ -1,109 +1,94 @@
 # AnyAgent
 
-AnyAgent 是以 FastAPI 为入口的多 Agent Runner 应用平台，目标是通过统一 HTTP API 对接不同 Agent 框架，并提供 MCP、RAG、工具调用和会话管理能力，方便其他平台接入。
+基于 FastAPI 的多 Agent Runner 应用平台。当前已实现首个 LangChain Agent：OpenAI 兼容模型、多轮对话、计算工具和统一 HTTP/WebSocket 流式事件。会话保存在单进程内存中，服务重启后清空，暂不接入 SQLite。
 
-项目目前处于开发初期，已实现 `main.py` 启动入口、服务生命周期、健康检查、独立日志模块与根目录 `data/` 初始化。Runner 适配、MCP、RAG 和 Agent 执行接口尚未实现。
+## 启动
 
-## 快速启动
-
-需要 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)。在项目根目录运行：
+需要 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)：
 
 ```bash
 uv sync --locked
 uv run main.py
 ```
 
-应用源码直接放在根目录 `anyagent/`，`uv sync` 只安装依赖，不打包安装 AnyAgent，也不生成项目的 `egg-info`。版本号由 `anyagent/__init__.py` 中的 `__version__` 提供。
+服务默认监听 `127.0.0.1:8000`，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
 
-服务默认监听 `127.0.0.1:8000`。启动后可访问：
+源码通过根目录 `anyagent/` 模块直接运行；uv 只管理依赖，不安装项目本身或生成 `egg-info`。
 
-- API 文档：<http://127.0.0.1:8000/docs>
-- OpenAPI：<http://127.0.0.1:8000/openapi.json>
-- 存活检查：<http://127.0.0.1:8000/health/live>
-- 就绪检查：<http://127.0.0.1:8000/health/ready>
+## 模型配置与热重载
 
-可指定监听地址与端口：
-
-```bash
-uv run main.py --host 0.0.0.0 --port 8080
-```
-
-当前配置保存在 `data/configs/cmd_config.json`。首次启动时，`anyagent/configs/default.py` 按类型创建默认 JSON；`anyagent/configs/load.py` 提供独立加载和校验，`anyagent/configs/__init__.py` 导出 `cmd_config`、`logging_config`，并以 `config` 作为主配置别名。
-
-可以停止服务后修改 `data/configs/cmd_config.json`，再重新启动。配置示例：
+首次启动会创建 `data/configs/model_config.json`。填写自己的 OpenAI 兼容服务：
 
 ```json
 {
-  "paths": {"data_dir": "data"},
-  "server": {"host": "127.0.0.1", "port": 8000}
+  "enabled": true,
+  "base_url": "https://your-provider.example/v1",
+  "model": "your-model-name",
+  "api_key": "your-api-key",
+  "temperature": 0.7,
+  "timeout_seconds": 60
 }
 ```
 
-配置值模型统一继承项目自己的 `BaseSettings`，禁止未知字段和字段重新赋值，并校验默认值；JSON 读写与恢复由 loader 负责。
+兼容服务需要支持 Chat Completions、流式响应和工具调用。`base_url` 填接口前缀，由 SDK 追加 `/chat/completions`；本地无认证服务可以填写占位密钥，例如 `local`。模型名和地址均由你定义。
 
-日志参数单独保存在 `data/configs/logging_config.json`，其他模块也可通过 `load_config(名称, 校验模型, 默认值)` 使用独立配置文件。
+每次新执行重新读取模型 JSON，无需重启；正在运行的请求使用自己的配置快照。API Key 只保存在后端配置中，状态接口不返回密钥。无效配置按现有加载规范先备份再恢复默认值；默认模型禁用，不会自动调用模型服务。
 
+LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时限单独保存在 `data/configs/langchain_config.json`，该配置在启动时读取，修改后重启生效。初始工具 `calculate` 支持加减乘除，不执行任意代码。
 
-路径统一相对于项目根目录解析，数据路径必须位于根目录 `data/` 内。配置缺失时创建默认值；JSON 编码、格式或内容无效时，原文件备份为 `data/configs/<配置文件名>.<时间戳>.bak`，再创建默认配置。读写权限等文件系统错误直接报告。某个配置损坏只恢复该文件，不影响其他类型。首次加载时会将旧的 `data/config.json` 拆分迁移，保留原文件备份；已有新文件优先，不覆盖其内容。命令行的 `--host`、`--port` 只覆盖本次启动值，不修改 JSON。
+## Agent 接口
 
-已安装项目依赖时，也可以使用虚拟环境中的 Python 直接启动：
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/v1/agent` | 模型配置状态、Runner、工具和连接方式 |
+| `GET /api/v1/sessions` | 会话列表 |
+| `POST /api/v1/sessions` | 创建会话 |
+| `GET /api/v1/sessions/{id}` | 查询会话历史 |
+| `DELETE /api/v1/sessions/{id}` | 删除未执行中的会话 |
+| `POST /api/v1/sessions/{id}/messages` | 普通 HTTP 对话，返回最终结果与过程事件 |
+| `POST /api/v1/sessions/{id}/stream` | HTTP 流式对话，响应格式为 SSE |
+| `WS /ws/sessions/{id}` | WebSocket 对话与取消 |
+| `GET /health/live`、`GET /health/ready` | 健康检查 |
 
-```bash
-python main.py
-```
+HTTP 请求体为 `{"content":"请使用工具计算 2+3"}`。SSE 是 HTTP 响应流，保留用于不使用 WebSocket 的调用方；通过 `fetch` 发起 POST 并消费流，而不是 GET EventSource。
 
-按 `Ctrl+C` 停止服务。应用和 Uvicorn 日志同时输出到控制台和 `data/logs/anyagent.log`，支持队列写入与文件轮转；退出时会清空队列。日志参数从独立的 `logging_config` 获取。
+WebSocket 发送 `{"type":"message","content":"请使用工具计算 2+3"}`，发送 `{"type":"cancel"}` 停止当前连接上的生成。
 
-外层模块使用 `from anyagent.utils.logger import logger` 获取日志入口；核心业务代码使用标准库日志接口，由启动时的统一日志配置接管输出。
+两种流式连接统一接收 `{"type":"事件类型","data":{...}}`：`delta` 为文本增量，`tool_call` 为工具名和参数，`tool_result` 为工具结果，`result` 为完整最终回复，`error` 为错误。WebSocket 取消成功后收到 `cancelled`。`result` 用于替换显示中的增量文本，避免重复拼接。
 
-## 设计方向
+仅成功完成的轮次写入历史；失败、超时、取消不提交半轮对话。断开流式连接会取消对应执行，目前不提供后台 Run、事件重放或断线续跑。SSE 开始后的错误通过 `error` 事件报告；普通 HTTP 错误通过状态码和 `detail` 报告。同一会话同时只能执行一个请求。历史按完整用户/助手轮次保留最近窗口。
 
-- 采用洋葱分层与 pipeline，领域和应用逻辑通过端口与具体后端解耦。
-- Runner 优先适配 LangChain、LangGraph、Pi SDK 和 Coze SDK，随后接入 Dify、DeerFlow。
-- MCP 与 RAG 属于应用核心能力，各 Runner 通过公共服务使用，并按实际能力声明支持范围。
-- 平台管理的运行数据统一保存在根目录 `data/`，便于后续迁移；不建设插件系统或插件市场。
+## 配置、日志与分层
 
-上述是后续开发方向，当前服务仅提供启动基础与健康检查。
+实际 JSON 和运行数据统一位于根目录 `data/`，不提交 Git：
 
-## 项目目录
+- `data/configs/cmd_config.json`：数据路径和监听参数，修改后重启。
+- `data/configs/logging_config.json`：队列日志、级别和轮转参数，修改后重启。
+- `data/configs/model_config.json`：模型连接与密钥，新执行热重载。
+- `data/configs/langchain_config.json`：Agent prompt 与执行限制，修改后重启。
+- `data/logs/anyagent.log`：应用和服务器日志。
+
+缺失配置独立创建默认值；格式、字段或路径无效时，原文件备份为 `data/configs/<文件名>.<时间戳>.bak`，仅恢复该类型。权限错误直接报告。旧 `data/config.json` 自动拆分迁移，已有新文件优先。
 
 ```text
-AnyAgent/
-├── main.py              # 项目启动入口
-├── pyproject.toml       # 项目元数据与依赖
-├── uv.lock              # 依赖锁文件
-├── docs/                # VitePress 文档，package.json 和锁文件均在此目录
-├── anyagent/
-│   ├── __init__.py      # 模块入口与版本号
-│   ├── configs/
-│   │   ├── base.py      # 配置值模型的共享校验规则
-│   │   ├── models.py    # 主配置、路径、服务和日志模型
-│   │   ├── default.py   # 默认配置与 JSON 创建
-│   │   ├── load.py      # 当前配置加载与模型校验
-│   │   ├── paths.py     # 所有运行路径的获取与校验
-│   │   └── __init__.py  # 导出共享配置与 paths 模块
-│   ├── api/
-│   │   ├── app.py       # FastAPI 构造与路由注册
-│   │   └── routes/
-│   │       └── health.py # 健康检查 HTTP 接口
-│   ├── runtime/
-│   │   └── bootstrap.py # 配置装配、数据初始化与生命周期
-│   └── utils/
-│       └── logger.py    # 控制台、队列写入与文件轮转
-├── tests/               # 配置与路径行为测试
-├── data/                # 运行数据，不提交 Git
-│   ├── configs/         # 按类型组织的运行配置
-│   │   ├── cmd_config.json
-│   │   └── logging_config.json
-│   └── logs/            # 应用和服务日志
-└── plans/               # 本地临时规划，不提交 Git
+anyagent/
+├── configs/         # 配置模型、独立加载与 paths.py
+├── core/
+│   ├── domain/      # 消息、会话、事件、错误
+│   ├── ports/       # Runner、Factory 和会话仓储 Protocol
+│   └── services/    # 会话执行、提交、预算与清理
+├── adapters/runners/langchain/ # 官方 SDK 和工具适配
+├── infrastructure/memory/    # 可替换的内存仓储
+├── api/             # HTTP、SSE、WebSocket 与错误转换
+├── runtime/         # 配置注入、依赖装配和生命周期
+└── utils/           # 日志等技术支撑
 ```
 
-`anyagent/configs/` 只保存 Python 配置代码，配置 JSON 统一保存在 `data/configs/`。所有目录、文件名规则与路径校验集中在 `anyagent/configs/paths.py`；其他模块通过 `from anyagent.configs import paths` 获取路径，或使用共享配置中的已解析路径，不硬编码或自行拼接业务目录。后续数据库、知识索引、文件和 Runner 状态也统一放入 `data/`。
+核心层不依赖 SDK、Web 框架、数据库或全局配置。新增 Runner 实现端口并由 runtime 装配，不在通用聊天 API 中添加厂商分支。实际路径只在 `anyagent/configs/paths.py` 定义。包根仅保留版本与包标识，Python 代码只使用绝对导入。
 
-后续业务实现放在 `anyagent/core/`：领域模型、端口、应用服务和 pipeline 只依赖内层契约；Runner、Provider、MCP 和检索的具体实现放在 `anyagent/adapters/`，数据库与文件实现放在 `anyagent/infrastructure/`。`runtime/` 组装依赖并注入配置，`api/` 处理 HTTP；核心业务不导入外层实现或全局配置。目录随功能创建，当前尚未建立这些 Agent 模块。
+LangGraph、Pi、Coze、Dify、DeerFlow，以及公共 MCP、RAG 和 pipeline 是后续开发目标，当前未实现。先验证 LangChain 与前端最小闭环，再替换内存仓储接入 SQLite；当前不承诺生产鉴权、持久执行或多进程部署。`plans/` 是本地计划目录，不提交。
 
-## 开发检查
+## 开发验证与文档
 
 ```bash
 uv run ruff check .
@@ -111,16 +96,15 @@ uv run ruff format --check .
 uv run pytest
 ```
 
-`uv.lock` 纳入版本控制；`plans/` 与 `data/` 保持本地使用。
+SDK 集成测试使用本地确定性的 OpenAI 兼容协议夹具，验证真实 LangChain 工具循环和连接契约；不需要云端密钥，也不代表已验证某个真实模型服务。
 
-## 文档
-
-需要 Node.js 22+。所有文档依赖在 `docs/` 内管理：
+VitePress 文档依赖位于 `docs/`，需要 Node.js 22+：
 
 ```bash
 cd docs
 npm ci
 npm run dev
+npm run build
 ```
 
-运行 `npm run build` 构建，`npm run preview` 预览。GitHub Actions 会在 main 分支的文档变更、相关 PR 或手动触发时构建站点，并上传 `docs-site` 产物。使用说明见 `docs/guide/`，文档开发流程见 `docs/development.md`。
+GitHub Actions 自动构建文档并上传 `docs-site` 产物，不提交构建输出、缓存或运行数据。
