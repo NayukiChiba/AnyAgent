@@ -128,12 +128,48 @@ test('saving webpage preferences updates the next chat view', async ({ page, req
   try {
     await page.goto('/settings')
     await page.getByRole('button', { name: '网页偏好', exact: true }).click()
-    await page.getByLabel('默认连接方式').selectOption('http')
+    await page.getByLabel('默认连接方式').click()
+    await page.getByRole('option', { name: 'HTTP（SSE）', exact: true }).click()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
     await page.getByRole('link', { name: '返回聊天' }).click()
-    await expect(page.getByLabel('连接方式')).toHaveValue('http')
+    await expect(page.getByLabel('连接方式')).toHaveText('HTTP · SSE')
   } finally {
     await restore(request, original)
   }
+})
+
+test('sidebar settings and outlined controls support keyboard and mobile layout', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const sidebar = page.locator('.sidebar-footer')
+  await expect(sidebar.getByRole('link', { name: '设置', exact: true })).toBeVisible()
+  await sidebar.getByRole('link', { name: '设置', exact: true }).click()
+  const toggle = page.getByLabel('流式输出', { exact: true })
+  await expect(toggle).toHaveCSS('appearance', 'none')
+  await expect(toggle).toHaveCSS('width', '42px')
+  await page.screenshot({ path: '/tmp/anyagent-settings-desktop.png', fullPage: true })
+  await page.getByRole('button', { name: '网页偏好', exact: true }).click()
+  const select = page.getByRole('combobox', { name: '默认连接方式', exact: true })
+  await select.focus()
+  await select.press('ArrowDown')
+  await expect(select).toHaveAttribute('aria-expanded', 'true')
+  await page.screenshot({ path: '/tmp/anyagent-settings-dropdown.png', fullPage: true })
+  await select.press('ArrowDown')
+  await select.press('Escape')
+  await expect(select).toHaveText('WebSocket')
+  await select.press('ArrowDown')
+  await select.press('End')
+  await select.press('Enter')
+  await expect(select).toHaveText('HTTP（SSE）')
+  await page.getByRole('button', { name: '撤销修改' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: '/tmp/anyagent-settings-mobile.png', fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('link', { name: '返回聊天' }).click()
+  await expect(
+    page.locator('.sidebar-footer').getByRole('link', { name: '设置', exact: true }),
+  ).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

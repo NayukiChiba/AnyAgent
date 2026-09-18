@@ -1,0 +1,210 @@
+:root {
+  --accent: #5d72e9;
+  --accent-soft: #eef0ff;
+  --surface: #fff;
+  --border: #e2e6ef;
+  --text-muted: #78859a;
+  --field-radius: 10px;
+}
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+.setting-select {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--field-radius);
+  background: var(--surface);
+  color: #354159;
+  font-size: 14px;
+  text-align: left;
+}
+.select-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-trigger svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.18s;
+}
+.select-trigger:hover:not(:disabled) {
+  border-color: #a6b2d4;
+  background: #fcfcff;
+}
+.select-trigger:focus-visible,
+.select-open .select-trigger {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #5d72e91a;
+}
+.select-open .select-trigger svg {
+  transform: rotate(180deg);
+}
+.select-trigger:disabled {
+  background: #f3f5f8;
+  opacity: 0.65;
+}
+.select-trigger[aria-invalid='true'] {
+  border-color: #d67070;
+}
+.select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 6px;
+  margin: 0;
+  list-style: none;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px #1d2e531c;
+}
+.select-menu li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #42506a;
+}
+.select-menu li.highlighted {
+  background: #f3f5fb;
+}
+.select-menu li[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: #5365cf;
+  font-weight: 600;
+}
+.setting-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 99px;
+  position: relative;
+  background: #b8c2d3;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.setting-toggle::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  left: 3px;
+  top: 3px;
+  box-shadow: 0 1px 3px #18274633;
+  transition: transform 0.18s;
+}
+.setting-toggle:checked {
+  background: var(--accent);
+}
+.setting-toggle:checked::before {
+  transform: translateX(18px);
+}
+.setting-toggle:focus-visible {
+  outline: 3px solid #a8b3fb;
+  outline-offset: 3px;
+}
+.setting-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.sidebar-settings {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px;
+  margin-bottom: 20px;
+  border: 1px solid #36415a;
+  border-radius: 9px;
+  color: #d8e1f3 !important;
+  font-size: 13px;
+  background: #202a3d;
+}
+.sidebar-settings:hover {
+  background: #2c3850;
+  border-color: #566987;
+}
+.sidebar-settings svg {
+  color: #a5b5df;
+}
+.connection-controls .setting-select {
+  width: 150px;
+}
+.connection-controls .select-trigger {
+  min-height: 36px;
+  padding: 8px 11px;
+  font-size: 12px;
+}
+.connection-controls .select-menu li {
+  font-size: 12px;
+}
+@media (max-width: 620px) {
+  .sidebar .sidebar-footer {
+    display: block;
+    border: 0;
+    padding: 0;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .sidebar-footer .sidebar-settings {
+    margin: 0;
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+  .sidebar-footer .memory-dot,
+  .sidebar-footer > p,
+  .sidebar-footer .memory-label,
+  .sidebar-footer .api-link {
+    display: none;
+  }
+  .sidebar-footer .sidebar-settings svg {
+    width: 14px;
+    height: 14px;
+  }
+  .sidebar .sessions {
+    min-width: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setting-toggle,
+  .setting-toggle::before,
+  .select-trigger svg {
+    transition: none;
+  }
+}

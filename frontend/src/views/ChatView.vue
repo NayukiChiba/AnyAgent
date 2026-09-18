@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeRouteLeave } from 'vue-router'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import SettingSelect from '../components/SettingSelect.vue'
 import { request, streamHttp, streamWebSocket } from '../api.js'
 
 const agent = ref(null)
@@ -173,9 +174,21 @@ onBeforeRouteLeave(
         </button>
       </nav>
       <div class="sidebar-footer">
-        <span class="memory-dot"></span>内存会话
+        <RouterLink to="/settings" class="sidebar-settings">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
+            <path
+              d="m10 3-1 3-3 1-3 3 2 2-2 2 3 3 3 1 1 3h4l1-3 3-1 3-3-2-2 2-2-3-3-3-1-1-3Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          设置
+        </RouterLink>
+        <span class="memory-dot"></span><span class="memory-label">内存会话</span>
         <p>服务重启后清空</p>
-        <a href="/docs" target="_blank" rel="noopener">API 文档 ↗</a>
+        <a class="api-link" href="/docs" target="_blank" rel="noopener">API 文档 ↗</a>
       </div>
     </aside>
     <main class="main">
@@ -185,7 +198,6 @@ onBeforeRouteLeave(
           <h1>{{ title }}</h1>
         </div>
         <div class="topbar-actions">
-          <RouterLink to="/settings" class="icon-button settings-link">设置</RouterLink>
           <span class="status" :class="{ connected: agent?.configured }"
             ><i></i>{{ agent?.configured ? '模型已配置' : '等待模型配置' }}</span
           ><button
@@ -207,11 +219,18 @@ onBeforeRouteLeave(
           }}</span>
         </div>
         <div class="connection-controls">
-          <label for="transport">连接方式</label
-          ><select id="transport" v-model="transport" :disabled="busy">
-            <option value="websocket">WebSocket</option>
-            <option value="http">HTTP · SSE</option></select
-          ><button class="text-button" :disabled="busy" @click="refreshAgent">刷新配置</button>
+          <label id="transport-label" for="transport">连接方式</label>
+          <SettingSelect
+            id="transport"
+            v-model="transport"
+            :disabled="busy"
+            labelledby="transport-label"
+            :choices="[
+              { value: 'websocket', label: 'WebSocket' },
+              { value: 'http', label: 'HTTP · SSE' },
+            ]"
+          />
+          <button class="text-button" :disabled="busy" @click="refreshAgent">刷新配置</button>
         </div>
       </section>
       <div v-if="agent && !agent.configured" class="config-hint">

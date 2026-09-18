@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import SettingSelect from './SettingSelect.vue'
 const props = defineProps({
   field: { type: Object, required: true },
   modelValue: { required: true },
@@ -18,9 +19,12 @@ function update(event) {
 </script>
 
 <template>
-  <div class="setting-field" :class="{ 'field-invalid': error }">
+  <div
+    class="setting-field"
+    :class="{ 'field-invalid': error, 'switch-field': field.control === 'switch' }"
+  >
     <div class="field-heading">
-      <label :for="id">{{ field.label }}</label>
+      <label :id="`${id}-label`" :for="id">{{ field.label }}</label>
       <span v-if="field.control === 'switch'">{{ modelValue ? '已开启' : '已关闭' }}</span>
     </div>
     <input
@@ -33,19 +37,17 @@ function update(event) {
       :aria-describedby="`${id}-hint`"
       @change="emit('update:modelValue', $event.target.checked)"
     />
-    <select
+    <SettingSelect
       v-else-if="field.control === 'select'"
       :id="id"
-      :value="modelValue"
+      :model-value="modelValue"
+      :choices="field.choices"
       :disabled="disabled"
-      :aria-invalid="!!error"
-      :aria-describedby="`${id}-hint`"
-      @change="update"
-    >
-      <option v-for="choice in field.choices" :key="choice.value" :value="choice.value">
-        {{ choice.label }}
-      </option>
-    </select>
+      :invalid="!!error"
+      :labelledby="`${id}-label`"
+      :describedby="`${id}-hint`"
+      @update:model-value="emit('update:modelValue', $event)"
+    />
     <textarea
       v-else-if="field.control === 'textarea'"
       :id="id"
