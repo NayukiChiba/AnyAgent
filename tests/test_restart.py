@@ -156,3 +156,26 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(tmp_path, over
             if process.returncode != 0:
                 output.seek(0)
                 pytest.fail(output.read())
+
+
+def test_restart_preflight_retains_service_when_new_port_is_occupied():
+    calls = []
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        busy_port = listener.getsockname()[1]
+        controller = RestartController(
+            lambda: calls.append("stop"),
+            port_override=busy_port,
+            host_override="127.0.0.1",
+            current_host="127.0.0.1",
+            current_port=free_port(),
+        )
+        with TestClient(create_app(restart_controller=controller)) as client:
+            session = client.post("/api/v1/sessions").json()
+            response = client.post("/api/v1/system/restart")
+            assert response.status_code == 503
+            assert "端口占用" in response.json()["detail"]["message"]
+            assert not calls and not controller.requested
+            assert client.get("/health/ready").status_code == 200
+            assert client.get(f"/api/v1/sessions/{session['id']}").status_code == 200

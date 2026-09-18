@@ -32,7 +32,13 @@ def main() -> None:
     def stop_server() -> None:
         http_server.should_exit = True
 
-    restart = RestartController(stop_server, port_override=args.port)
+    restart = RestartController(
+        stop_server,
+        port_override=args.port,
+        host_override=args.host,
+        current_host=server.host,
+        current_port=server.port,
+    )
     settings = load_langchain_config()
     http_server = uvicorn.Server(
         uvicorn.Config(

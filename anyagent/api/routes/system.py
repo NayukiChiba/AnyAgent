@@ -38,7 +38,7 @@ async def restart(request: Request, background: BackgroundTasks) -> dict:
         raise HTTPException(
             503,
             detail={
-                "message": "无法读取重启配置，请检查设置和配置目录权限；当前服务继续运行"
+                "message": "重启准备失败，请检查监听地址、端口占用和配置目录权限；当前服务继续运行"
             },
         ) from None
     except RuntimeError:
