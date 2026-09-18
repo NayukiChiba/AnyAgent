@@ -4,11 +4,18 @@ target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "TID252"]
+select = ["E", "F", "I", "TID251", "TID252"]
 ignore = ["E501", "F841"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"logging".msg = "使用 anyagent.utils.logger 的 AnyAgentLogger；原生 logging 仅限内部兼容实现。"
+
+[tool.ruff.lint.per-file-ignores]
+"anyagent/utils/logger.py" = ["TID251"]
+"tests/test_logger.py" = ["TID251"]
 
 [tool.ruff.format]
 quote-style = "double"
