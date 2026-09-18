@@ -9,15 +9,22 @@
 ```json
 {
   "enabled": true,
+  "streaming": true,
   "base_url": "https://your-provider.example/v1",
   "model": "your-model-name",
   "api_key": "your-api-key",
   "temperature": 0.7,
-  "timeout_seconds": 60
+  "timeout_seconds": 60,
+  "max_retries": 0,
+  "stream_usage": false
 }
 ```
 
 支持自定义 OpenAI 兼容模型地址、名称和密钥。服务需支持标准 Chat Completions、流式响应与工具调用。地址填接口前缀，SDK 自动追加 `/chat/completions`。无认证本地服务填写占位密钥 `local`。
+
+`streaming: true` 为流式模型调用，会产生 `delta` 文本增量；`false` 为上游非流式模型调用，收到完整模型回复后输出最终结果，不发送 `delta`。两种模式仍提供工具调用与结果。开关独立于 HTTP/SSE 和 WebSocket 连接方式：通过 SSE/WebSocket 使用非流式模型时，工具步骤仍可作为事件发送，最终文本完整发送。
+
+`max_retries` 控制 SDK 重试次数，默认为 0；`stream_usage` 默认为 false，仅在服务支持流式用量信息时开启。
 
 模型配置在每次新执行时读取，修改后无需重启；已运行请求继续使用原快照。页面点击“刷新配置”更新显示状态。密钥留在后端，状态接口不返回密钥；`data/` 不提交 Git。关闭 `enabled` 可停止新请求调用模型，既有执行不受影响。
 
@@ -34,20 +41,37 @@
   "max_sessions": 64,
   "max_history_messages": 40,
   "max_concurrent_runs": 4,
-  "run_timeout_seconds": 120
+  "run_timeout_seconds": 120,
+  "max_input_chars": 8000,
+  "max_output_chars": 32000,
+  "max_event_chars": 64000,
+  "cleanup_timeout_seconds": 5
 }
 ```
 
-这些设置在启动时读取，修改后重启。`max_steps` 是 LangChain 图执行步数上限，不是工具调用次数。历史窗口按完整用户/助手轮次裁剪；窗口为奇数时向下取偶数。输入最多 8000 字符，最终回复最多 32000 字符，过程事件有大小预算。
+这些设置在启动时读取，修改后重启。`max_steps` 是 LangChain 图执行步数上限，不是工具调用次数。历史窗口按完整用户/助手轮次裁剪；窗口为奇数时向下取偶数。输入、最终回复和过程事件大小分别由 `max_input_chars`、`max_output_chars`、`max_event_chars` 控制，默认分别为 8000、32000、64000；`cleanup_timeout_seconds` 控制模型连接清理时限。页面输入上限由状态接口读取，与后端使用同一配置。
 
 初始工具 `calculate` 接收 `operation`（add/subtract/multiply/divide）、`a`、`b`，支持加减乘除。它不执行任意代码。公共 ToolExecutor、MCP、RAG 和其他 Runner 仍在后续开发范围内。
+
+## 前端运行配置
+
+`data/configs/frontend_config.json`：
+
+```json
+{
+  "default_transport": "websocket",
+  "cancel_timeout_ms": 1500
+}
+```
+
+`default_transport` 支持 `websocket` 和 `http`，决定页面初始连接方式；`cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。状态接口刷新时重新加载该文件，重新打开页面采用最新默认连接；手动选择的连接不会因刷新状态被重置。
 
 ## 使用工作台
 
 先按[快速开始](./getting-started.md)构建前端，运行 `main.py` 后访问 <http://127.0.0.1:8000/>。
 
 1. 填写模型配置，刷新配置状态。
-2. 输入“请使用工具计算 2+3”，观察工具参数、工具结果和最终回复。
+2. 输入“请使用工具计算 2+3”，观察工具参数、工具结果和最终回复。修改模型配置的 `streaming` 可以切换流式和非流式输出。
 3. 在“连接方式”切换 WebSocket 或 HTTP · SSE。
 4. 使用“新建会话”、会话列表和“删除会话”管理内存会话；“停止生成”取消当前轮次。
 
