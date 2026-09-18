@@ -40,9 +40,13 @@ except Exception:
 
 ## INFO 与 DEBUG
 
-INFO 展示项目启动、SQLite 连接、Agent 执行开始/完成/取消和服务退出。执行记录包含会话标识、耗时、输出长度和工具次数，便于对应操作；不输出聊天正文、工具参数、模型密钥或 SDK 异常正文。执行失败与超时使用 WARNING。
+INFO 展示项目启动、SQLite 连接、用户输入、完整模型最终回复、工具调用名称/标识/参数/结果，以及执行开始/完成/取消和服务退出。业务内容默认进入控制台和文件；记录会话标识、耗时和数量以关联操作。模型回复在校验后记录，历史提交单独记录，因此数据库写入失败时也能看到已生成的回复。执行失败与超时使用 WARNING。
 
-DEBUG 补充会话创建/删除、上下文消息数、Runner 创建、工具调用次数与历史提交阶段。选择 DEBUG 不会默认放开依赖日志；需要定位依赖问题时单独调整 third_party_level。数据库驱动、SQLAlchemy 引擎以及 OpenAI/HTTP 客户端低于 WARNING 的日志始终过滤，避免 SQL 参数、请求载荷与密钥进入日志。
+DEBUG 补充 LangChain 每轮模型响应（含工具请求）、会话创建/删除、上下文消息数、Runner 创建、工具调用次数与历史提交阶段。流式 delta 不逐 token 写入日志，正常轮次最终回复在 INFO 完整记录一次。选择 DEBUG 不会默认放开依赖日志；需要定位依赖问题时单独调整 third_party_level。数据库驱动、SQLAlchemy 引擎以及 OpenAI/HTTP 客户端低于 WARNING 的日志始终过滤，避免 SQL 参数、请求载荷与密钥进入日志。
+
+AnyAgentLogger 将字典、列表等结构化参数输出为保留中文的单行 JSON，转义正文换行，避免伪造日志行。嵌套字段和可解析的 JSON 字符串中的 api_key、Authorization、password、access_token 等认证字段替换为 `[REDACTED]`，保留普通正文和参数；原始事件与会话内容不变。自由文本中的任意凭据无法仅凭字段名自动识别，调用方不得把连接配置、模型 API Key、认证头或整个 SDK 响应/异常正文传入日志。
+
+AstrBot 的[工具循环](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/agent/runners/tool_loop_agent_runner.py)在 INFO 记录工具名称、参数和结果，[回复阶段](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/pipeline/respond/stage.py)在 INFO 记录发送内容，[OpenAI Provider](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/provider/sources/openai_source.py)在 DEBUG 记录 completion。基础日志模块主要负责等级、格式、输出、插件分级和独立 trace 通道，没有统一禁止模型回复/工具参数，也未发现通用正文脱敏器；内容由业务调用点决定。AnyAgent 保留自己的自定义入口和认证字段保护，不引入插件日志或额外 trace 系统。
 
 参考 AstrBot 的[日志模块](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/log.py)对噪声依赖单独设门槛的做法，AnyAgent 通过自己的队列处理器过滤，不修改其他日志处理器。core 统一使用项目日志接口。
 

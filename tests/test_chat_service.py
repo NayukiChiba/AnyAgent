@@ -192,7 +192,7 @@ def test_injected_output_limits_prevent_history_commit(limits):
     asyncio.run(check())
 
 
-def test_run_logs_identify_phases_without_message_or_exception_content(caplog):
+def test_run_logs_include_business_content_without_sdk_exception_text(caplog):
     async def check():
         repository = MemorySessionRepository(max_sessions=1)
         factory = Factory()
@@ -214,5 +214,63 @@ def test_run_logs_identify_phases_without_message_or_exception_content(caplog):
     assert "Agent context loaded" in content
     assert "Agent history committed" in content
     assert "Agent execution failed" in content
-    assert "private-user-message" not in content
+    assert "private-user-message" in content
+    assert "Agent user message" in content
+    assert content.count("Agent model response") == 1
+    assert "回复" in content
     assert "secret" not in content
+
+
+@pytest.mark.parametrize("fail_after_tools", [False, True])
+def test_tool_logs_include_parameters_results_and_survive_failed_runs(
+    caplog, fail_after_tools
+):
+    class ToolRunner(Runner):
+        async def stream(self, messages):
+            yield Event(
+                "tool_call",
+                {
+                    "id": "call-one",
+                    "name": "calculate",
+                    "arguments": {"operation": "add", "a": 2, "b": 3},
+                },
+            )
+            yield Event(
+                "tool_result", {"id": "call-one", "name": "calculate", "content": "5.0"}
+            )
+            if fail_after_tools:
+                raise RuntimeError("secret upstream credential")
+            yield Event("delta", {"content": "结果"})
+            yield Event("delta", {"content": "是 5"})
+            yield Event("result", {"content": "结果是 5"})
+
+    async def check():
+        factory = Factory()
+        factory.next = ToolRunner()
+        repository = MemorySessionRepository(max_sessions=1)
+        service = configured_service(repository, factory)
+        session = await service.create_session()
+        if fail_after_tools:
+            with pytest.raises(ChatError):
+                await collect(service, session.id)
+            assert (await repository.get(session.id)).messages == ()
+        else:
+            await collect(service, session.id)
+        await service.shutdown()
+
+    with caplog.at_level("INFO", logger="anyagent.core.services.chat"):
+        asyncio.run(check())
+    messages = [record.getMessage() for record in caplog.records]
+    tool_call = next(message for message in messages if "Agent tool call:" in message)
+    tool_result = next(
+        message for message in messages if "Agent tool result:" in message
+    )
+    assert '"name": "calculate"' in tool_call
+    assert '"operation": "add", "a": 2, "b": 3' in tool_call
+    assert '"id": "call-one"' in tool_call and '"id": "call-one"' in tool_result
+    assert '"content": "5.0"' in tool_result
+    responses = [message for message in messages if "Agent model response:" in message]
+    assert len(responses) == (0 if fail_after_tools else 1)
+    if responses:
+        assert '"content": "结果是 5"' in responses[0]
+    assert "secret upstream credential" not in caplog.text

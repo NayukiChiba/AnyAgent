@@ -85,6 +85,11 @@ class ChatService:
                 len(session.messages),
                 len(content),
             )
+            logger.info(
+                "Agent user message: session=%s data=%s",
+                session_id,
+                {"content": content},
+            )
             user = Message("user", content)
             async with asyncio.timeout(self.timeout_seconds):
                 runner = await self.runners.create()
@@ -110,6 +115,18 @@ class ChatService:
                                 raise ChatError(
                                     "output_limit", "模型输出超过单次执行限制"
                                 )
+                            if event.type == "tool_call":
+                                logger.info(
+                                    "Agent tool call: session=%s data=%s",
+                                    session_id,
+                                    event.data,
+                                )
+                            elif event.type == "tool_result":
+                                logger.info(
+                                    "Agent tool result: session=%s data=%s",
+                                    session_id,
+                                    event.data,
+                                )
                             yield event
                 if not isinstance(result, str) or not result.strip():
                     raise ChatError("runner_failed", "模型未返回有效回复")
@@ -122,6 +139,11 @@ class ChatService:
                     session,
                     title=content[:28] if not session.messages else session.title,
                     messages=messages,
+                )
+                logger.info(
+                    "Agent model response: session=%s data=%s",
+                    session_id,
+                    {"content": result},
                 )
                 await self.repository.save(updated)
                 completed = True

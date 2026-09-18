@@ -15,6 +15,9 @@ from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
 from anyagent.configs import load_model_config
 from anyagent.configs.agent import LangChainSettings, ModelSettings
 from anyagent.core.domain.chat import ChatError, Event, Message
+from anyagent.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @tool
@@ -93,6 +96,13 @@ class LangChainRunner:
                             continue
                         for message in update.get("messages", []):
                             if isinstance(message, AIMessage):
+                                logger.debug(
+                                    "LangChain model response: data=%s",
+                                    {
+                                        "content": text_content(message.content),
+                                        "tool_calls": message.tool_calls,
+                                    },
+                                )
                                 for call in message.tool_calls:
                                     yield Event(
                                         "tool_call",

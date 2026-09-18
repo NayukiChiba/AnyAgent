@@ -174,3 +174,36 @@ def test_frontend_preferences_reload_and_input_limit_is_shared(
             assert socket.receive_json()["data"]["code"] == "invalid_message"
         assert not model_endpoint[1]
         assert client.get(url).json()["messages"] == []
+
+
+@pytest.mark.parametrize("streaming", [True, False])
+def test_real_sdk_logs_model_replies_and_tool_execution(configured_app, streaming):
+    from anyagent.configs import LoggingSettings
+    from anyagent.utils.logger import LogManager
+
+    app, connection = configured_app
+    connection["streaming"] = streaming
+    paths.get_config_path("model_config").write_text(json.dumps(connection))
+    log_path = paths.get_log_path()
+    LogManager.configure(LoggingSettings(level="DEBUG", file_path=log_path))
+    try:
+        with TestClient(app) as client:
+            session = client.post("/api/v1/sessions").json()
+            response = client.post(
+                f"/api/v1/sessions/{session['id']}/messages",
+                json={"content": "计算 2+3"},
+            )
+            assert response.status_code == 200, response.text
+    finally:
+        LogManager.shutdown()
+    records = log_path.read_text()
+    assert "计算 2+3" in records
+    assert "Agent tool call:" in records and '"name": "calculate"' in records
+    assert '"operation": "add"' in records
+    assert "Agent tool result:" in records and '"content": "5.0"' in records
+    assert records.count("Agent model response:") == 1
+    assert '"content": "结果是 5"' in records
+    assert records.count("LangChain model response:") == 2
+    assert "fixture-secret" not in records
+    assert "HTTP Request:" not in records
+    assert "httpcore" not in records and "aiosqlite" not in records

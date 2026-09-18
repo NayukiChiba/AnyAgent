@@ -85,7 +85,8 @@ feat(config): 从 JSON 加载运行配置
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。
 - 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
 
-- 日志 INFO 记录项目生命周期与执行结果，DEBUG 记录执行阶段、耗时和数量，不输出聊天正文、工具参数或密钥。依赖日志默认至少 WARNING，由 logging_config 的 third_party_level 配置；数据库与模型 HTTP 客户端的 DEBUG/INFO 始终过滤，main.py 关闭 HTTP 访问日志。
+- 日志 INFO 记录项目生命周期、用户输入、完整模型最终回复、工具名称/调用标识/参数/结果及执行结果；这些业务内容默认进入控制台和 data/logs，不得以依赖降噪为由屏蔽。DEBUG 补充模型各轮响应（含工具请求）、执行阶段、耗时和数量；不逐 token 重复记录。依赖日志默认至少 WARNING，由 logging_config 的 third_party_level 配置；数据库与模型 HTTP 客户端的 DEBUG/INFO 始终过滤，main.py 关闭 HTTP 访问日志。
+- 业务日志通过 AnyAgentLogger 将结构化参数序列化为保留 Unicode 的单行 JSON，换行转义，完整记录普通文本；嵌套及 JSON 字符串中的 api_key、Authorization、password、access_token 等明确认证字段脱敏，不修改原始对象。禁止传入连接配置、实际模型 API Key、认证请求头或整个 SDK HTTP 响应/异常正文；格式不明确的自由文本不能靠字段名脱敏自动识别所有密钥，调用方须避免将凭据混入文本。模型输出与历史提交分别记录，输出日志不代表保存成功；失败/取消仍保留已发生的工具日志。
 - 全项目（包括 core、configs、infrastructure、adapters、api、runtime 与启动入口）统一使用自定义 `anyagent.utils.logger.AnyAgentLogger`：通过 `from anyagent.utils.logger import logger` 获取共享入口，或通过 `get_logger(__name__)` 获取模块入口。禁止业务代码直接导入原生 logging、调用 logging.getLogger，或自行创建 Handler、设置日志级别和输出。原生 logging 仅作为 utils/logger.py 内部输出与第三方兼容实现；专门验证日志兼容层的测试可使用原生 logging 注入依赖记录。Ruff TID251 禁止导入 logging，仅 utils/logger.py 与 tests/test_logger.py 豁免；新增业务模块不得扩大豁免范围。
 - 自定义接口仅公开 debug、info、warning、error、critical、exception 固定方法与只读名称，不返回原生 Logger。级别、队列、过滤、格式、轮转及生命周期集中由 LogManager 管理；日志模块导入不加载配置、不创建文件或线程，LoggingSettings 仅用于类型检查，runtime 显式传入配置。core 对该通用接口的依赖是跨层日志支撑的明确例外，不扩展到配置、文件或其他工具实现。日志路径和轮转参数来自共享配置，日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
 - 文档使用 VitePress，`package.json`、锁文件和依赖安装均在 `docs/` 内；修改文档需运行 `npm ci` 和 `npm run build`，不提交构建产物或缓存。
