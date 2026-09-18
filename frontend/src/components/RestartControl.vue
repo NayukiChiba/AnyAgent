@@ -16,11 +16,11 @@ let wake
 let disposed = false
 const explanation = computed(() =>
   supported.value
-    ? '重新加载已保存的设置，内存聊天记录将清空。'
+    ? '重新加载已保存的设置，聊天记录会保留。'
     : '通过 main.py 启动服务后可在此重启。',
 )
 async function restart() {
-  if (!window.confirm('确定重启整个服务吗？正在进行的对话会停止，内存聊天记录会清空。')) return
+  if (!window.confirm('确定重启整个服务吗？正在进行的对话会停止，已保存的聊天记录会保留。')) return
   restarting.value = true
   failed.value = false
   emit('busy', true)

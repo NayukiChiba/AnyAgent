@@ -74,7 +74,7 @@ test('all configuration groups render with validation, dirty guards and restart 
     await page.getByLabel('服务端口').fill('9001')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('需要重启服务')
-    for (const name of ['Agent 行为', '网页偏好', '日志', '模型连接']) {
+    for (const name of ['Agent 行为', '网页偏好', '会话存储', '日志', '模型连接']) {
       await page.getByRole('button', { name, exact: true }).click()
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     }

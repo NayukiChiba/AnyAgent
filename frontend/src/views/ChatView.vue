@@ -186,8 +186,8 @@ onBeforeRouteLeave(
           </svg>
           设置
         </RouterLink>
-        <span class="memory-dot"></span><span class="memory-label">内存会话</span>
-        <p>服务重启后清空</p>
+        <span class="memory-dot"></span><span class="memory-label">本机会话</span>
+        <p>聊天记录自动保存</p>
         <a class="api-link" href="/docs" target="_blank" rel="noopener">API 文档 ↗</a>
       </div>
     </aside>
@@ -310,7 +310,7 @@ onBeforeRouteLeave(
             </button>
           </div>
         </form>
-        <p class="composer-note">会话保存在当前服务内存中 · 工具：calculate</p>
+        <p class="composer-note">会话保存在本机数据库中 · 工具：calculate</p>
       </footer>
     </main>
   </div>
