@@ -44,6 +44,7 @@ log_file = logging_config.file_path
 ```json
 {
   "level": "INFO",
+  "third_party_level": "WARNING",
   "file_path": "data/logs/anyagent.log",
   "max_bytes": 10485760,
   "backup_count": 5

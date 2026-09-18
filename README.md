@@ -105,7 +105,7 @@ WebSocket 发送 `{"type":"message","content":"请使用工具计算 2+3"}`，�
 实际 JSON 和运行数据统一位于根目录 `data/`，不提交 Git：
 
 - `data/configs/cmd_config.json`：数据路径和监听参数，修改后重启。
-- `data/configs/logging_config.json`：队列日志、级别和轮转参数，修改后重启。
+- `data/configs/logging_config.json`：项目日志级别、依赖日志最低级别和轮转参数，修改后重启；默认过滤依赖 DEBUG/INFO，关闭 HTTP 访问日志。
 - `data/configs/model_config.json`：模型连接与密钥，新执行热重载。
 - `data/configs/langchain_config.json`：Agent prompt、步骤、历史、并发、输入/输出/事件大小和清理时限，修改后重启。
 - `data/configs/frontend_config.json`：前端默认连接和取消确认等待时间；刷新配置读取，默认连接在重新加载页面时采用。

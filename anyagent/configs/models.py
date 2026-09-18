@@ -47,6 +47,9 @@ class LoggingSettings(BaseSettings):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = (
         default.DEFAULT_LOGGING_CONFIG["level"]
     )
+    third_party_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = (
+        default.DEFAULT_LOGGING_CONFIG["third_party_level"]
+    )
     file_path: Path = default.DEFAULT_LOGGING_CONFIG["file_path"]
     max_bytes: int = Field(
         default.DEFAULT_LOGGING_CONFIG["max_bytes"], ge=1, strict=True

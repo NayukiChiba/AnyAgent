@@ -52,6 +52,13 @@ def create_app(
         async with AsyncExitStack() as resources:
             resources.push_async_callback(repository.aclose)
             await repository.initialize()
+            logger.info("Session storage connected: backend=sqlite")
+            logger.debug(
+                "Agent limits loaded: max_sessions=%d max_history_messages=%d max_concurrent_runs=%d",
+                settings.max_sessions,
+                settings.max_history_messages,
+                settings.max_concurrent_runs,
+            )
             app.state.chat_service = ChatService(
                 repository,
                 factory,

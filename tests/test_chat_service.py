@@ -190,3 +190,31 @@ def test_injected_output_limits_prevent_history_commit(limits):
         assert factory.next.closed
 
     asyncio.run(check())
+
+
+def test_run_logs_identify_phases_without_message_or_exception_content(caplog):
+    import logging
+
+    async def check():
+        repository = MemorySessionRepository(max_sessions=1)
+        factory = Factory()
+        service = configured_service(repository, factory)
+        session = await service.create_session()
+        await collect(service, session.id, "private-user-message")
+        factory.next = Runner(fail=True)
+        with pytest.raises(ChatError):
+            await collect(service, session.id, "private-user-message")
+        await service.shutdown()
+        return session.id
+
+    with caplog.at_level(logging.DEBUG, logger="anyagent.core.services.chat"):
+        session_id = asyncio.run(check())
+    content = caplog.text
+    assert session_id in content
+    assert "Agent run started" in content
+    assert "Agent run completed" in content
+    assert "Agent context loaded" in content
+    assert "Agent history committed" in content
+    assert "Agent execution failed" in content
+    assert "private-user-message" not in content
+    assert "secret" not in content

@@ -11,6 +11,7 @@ DEFAULT_CMD_CONFIG = {
 }
 DEFAULT_LOGGING_CONFIG = {
     "level": "INFO",
+    "third_party_level": "WARNING",
     "file_path": paths.as_project_relative(paths.get_log_path()),
     "max_bytes": 10485760,
     "backup_count": 5,

@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import replace
 from datetime import UTC, datetime
+from time import perf_counter
 from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
@@ -43,12 +44,14 @@ class ChatService:
     async def create_session(self) -> Session:
         session = Session(uuid4().hex, "新会话", datetime.now(UTC).isoformat())
         await self.repository.save(session)
+        logger.debug("Session created: session=%s", session.id)
         return session
 
     async def delete_session(self, session_id: str) -> None:
         if session_id in self._active:
             raise ChatError("session_busy", "会话正在执行，请先停止生成")
         await self.repository.delete(session_id)
+        logger.debug("Session deleted: session=%s", session_id)
 
     async def stream(self, session_id: str, content: str) -> AsyncIterator[Event]:
         """Execute a turn while preserving the previous snapshot on failure.
@@ -70,17 +73,35 @@ class ChatService:
             raise ChatError("capacity_exceeded", "当前执行数量已达上限，请稍后重试")
         self._active[session_id] = asyncio.current_task()
         runner = None
+        started = perf_counter()
+        tool_calls = 0
+        completed = False
+        logger.info("Agent run started: session=%s", session_id)
         try:
             session = await self.repository.get(session_id)
+            logger.debug(
+                "Agent context loaded: session=%s messages=%d input_chars=%d",
+                session_id,
+                len(session.messages),
+                len(content),
+            )
             user = Message("user", content)
             async with asyncio.timeout(self.timeout_seconds):
                 runner = await self.runners.create()
+                logger.debug("Agent runner created: session=%s", session_id)
                 result = None
                 output_size = 0
                 async with aclosing(
                     runner.stream(session.messages + (user,))
                 ) as events:
                     async for event in events:
+                        if event.type == "tool_call":
+                            tool_calls += 1
+                            logger.debug(
+                                "Agent tool call received: session=%s count=%d",
+                                session_id,
+                                tool_calls,
+                            )
                         if event.type == "result":
                             result = event.data.get("content")
                         else:
@@ -103,14 +124,53 @@ class ChatService:
                     messages=messages,
                 )
                 await self.repository.save(updated)
+                completed = True
+                logger.info(
+                    "Agent run completed: session=%s elapsed_ms=%.0f output_chars=%d tool_calls=%d",
+                    session_id,
+                    (perf_counter() - started) * 1000,
+                    len(result),
+                    tool_calls,
+                )
+                logger.debug(
+                    "Agent history committed: session=%s messages=%d",
+                    session_id,
+                    len(messages),
+                )
                 yield Event("result", {"content": result, "session_id": session_id})
+        except asyncio.CancelledError:
+            if not completed:
+                logger.info(
+                    "Agent run cancelled: session=%s elapsed_ms=%.0f",
+                    session_id,
+                    (perf_counter() - started) * 1000,
+                )
+            raise
+        except GeneratorExit:
+            if not completed:
+                logger.info(
+                    "Agent stream closed: session=%s elapsed_ms=%.0f",
+                    session_id,
+                    (perf_counter() - started) * 1000,
+                )
+            raise
         except TimeoutError as exc:
+            logger.warning(
+                "Agent run timed out: session=%s timeout_seconds=%s",
+                session_id,
+                self.timeout_seconds,
+            )
             raise ChatError("run_timeout", "执行超时，请稍后重试") from exc
-        except ChatError:
+        except ChatError as exc:
+            logger.warning("Agent run failed: session=%s code=%s", session_id, exc.code)
             raise
         except Exception as exc:
             # SDK exception text may include upstream response bodies or credentials.
-            logger.warning("Agent execution failed: %s", type(exc).__name__)
+            logger.warning(
+                "Agent execution failed: session=%s error=%s",
+                session_id,
+                type(exc).__name__,
+            )
             raise ChatError(
                 "runner_failed", "模型执行失败，请检查模型配置和服务状态"
             ) from exc

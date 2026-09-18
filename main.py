@@ -46,7 +46,8 @@ def main() -> None:
             host=server.host,
             port=server.port,
             log_config=None,
-            log_level=logging_config.level.lower(),
+            log_level=logging_config.third_party_level.lower(),
+            access_log=False,
             timeout_graceful_shutdown=settings.cleanup_timeout_seconds,
         )
     )

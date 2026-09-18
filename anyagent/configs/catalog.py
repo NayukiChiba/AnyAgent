@@ -167,8 +167,13 @@ GROUPS = {
         {
             "level": (
                 "日志详细程度",
-                "正常使用选择 INFO；排查问题时可选择 DEBUG。",
+                "INFO 展示项目运行过程；DEBUG 补充执行阶段、耗时与数量，不记录聊天正文或密钥。",
                 False,
+            ),
+            "third_party_level": (
+                "依赖日志最低级别",
+                "默认 WARNING，仅展示依赖的警告和错误；仍受上面的日志级别限制。HTTP 请求访问日志关闭，数据库和模型 HTTP 客户端的 DEBUG/INFO 始终过滤，避免输出参数或密钥。",
+                True,
             ),
             "file_path": (
                 "日志文件位置",

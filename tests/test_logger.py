@@ -108,3 +108,58 @@ def test_database_debug_logs_do_not_include_chat_content(log_settings):
     assert marker not in content
     assert "Visible application debug" in content
     assert "Visible database warning" in content
+
+
+@pytest.mark.parametrize("level", ["INFO", "DEBUG"])
+def test_project_logs_exclude_dependency_chatter_and_keep_failures(log_settings, level):
+    settings = log_settings.model_copy(update={"level": level})
+    LogManager.configure(settings)
+    logger.info("Project lifecycle info")
+    logger.debug("Project execution debug")
+    logging.getLogger("anyagent.core.services.chat").info("Project agent info")
+    for name in (
+        "uvicorn.access",
+        "uvicorn.error",
+        "httpx",
+        "httpcore",
+        "asyncio",
+        "openai",
+        "anyagent_extra",
+    ):
+        dependency = logging.getLogger(name)
+        previous = dependency.level
+        dependency.setLevel(logging.DEBUG)
+        try:
+            dependency.debug("Hidden dependency debug")
+            dependency.info("Hidden dependency info")
+            dependency.warning("Retained dependency warning")
+            dependency.error("Retained dependency error")
+        finally:
+            dependency.setLevel(previous)
+    LogManager.shutdown()
+    content = settings.file_path.read_text()
+    assert "Project lifecycle info" in content
+    assert "Project agent info" in content
+    assert ("Project execution debug" in content) == (level == "DEBUG")
+    assert "Hidden dependency" not in content
+    assert "Retained dependency warning" in content
+    assert "Retained dependency error" in content
+
+
+def test_dependency_threshold_is_configurable_and_database_parameters_stay_private(
+    log_settings,
+):
+    settings = log_settings.model_copy(
+        update={"level": "DEBUG", "third_party_level": "DEBUG"}
+    )
+    LogManager.configure(settings)
+    logging.getLogger("external.client").debug("Explicit dependency debug")
+    logging.getLogger("aiosqlite").debug("Private database parameter")
+    for name in ("openai", "httpx", "httpcore"):
+        logging.getLogger(name).debug("Private SDK request payload")
+        logging.getLogger(name).info("Private HTTP request info")
+    logging.getLogger("sqlalchemy.engine.Engine").info("Private query parameter")
+    LogManager.shutdown()
+    content = settings.file_path.read_text()
+    assert "Explicit dependency debug" in content
+    assert "Private" not in content

@@ -10,13 +10,28 @@ from anyagent.configs import LoggingSettings
 logger = logging.getLogger("anyagent")
 
 
-class _StorageLogFilter(logging.Filter):
+class _ApplicationLogFilter(logging.Filter):
+    def __init__(self, third_party_level: str):
+        super().__init__()
+        self.third_party_level = logging.getLevelNamesMapping()[third_party_level]
+
     def filter(self, record: logging.LogRecord) -> bool:
-        # Driver debug records include bound parameters and fetched message content.
-        driver = record.name == "aiosqlite" or record.name.startswith(
-            ("aiosqlite.", "sqlalchemy.engine")
+        # Driver and SDK debug records can include credentials and message content.
+        sensitive = any(
+            record.name == name or record.name.startswith(name + ".")
+            for name in (
+                "aiosqlite",
+                "sqlalchemy.engine",
+                "openai",
+                "httpx",
+                "httpcore",
+            )
         )
-        return not driver or record.levelno >= logging.WARNING
+        project = record.name == "anyagent" or record.name.startswith("anyagent.")
+        minimum = 0 if project else self.third_party_level
+        if sensitive:
+            minimum = max(minimum, logging.WARNING)
+        return record.levelno >= minimum
 
 
 class LogManager:
@@ -55,7 +70,7 @@ class LogManager:
         queue: Queue = Queue()
         cls._queue_handler = QueueHandler(queue)
         cls._queue_handler.setLevel(settings.level)
-        cls._queue_handler.addFilter(_StorageLogFilter())
+        cls._queue_handler.addFilter(_ApplicationLogFilter(settings.third_party_level))
         cls._listener = QueueListener(
             queue, console_handler, file_handler, respect_handler_level=True
         )
