@@ -10,6 +10,15 @@ from anyagent.configs import LoggingSettings
 logger = logging.getLogger("anyagent")
 
 
+class _StorageLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Driver debug records include bound parameters and fetched message content.
+        driver = record.name == "aiosqlite" or record.name.startswith(
+            ("aiosqlite.", "sqlalchemy.engine")
+        )
+        return not driver or record.levelno >= logging.WARNING
+
+
 class LogManager:
     _listener: QueueListener | None = None
     _queue_handler: QueueHandler | None = None
@@ -46,6 +55,7 @@ class LogManager:
         queue: Queue = Queue()
         cls._queue_handler = QueueHandler(queue)
         cls._queue_handler.setLevel(settings.level)
+        cls._queue_handler.addFilter(_StorageLogFilter())
         cls._listener = QueueListener(
             queue, console_handler, file_handler, respect_handler_level=True
         )

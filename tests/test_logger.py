@@ -1,8 +1,11 @@
+import asyncio
 import logging
 
 import pytest
 
 from anyagent.configs import LoggingSettings, paths
+from anyagent.core.domain.chat import Message, Session
+from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.utils.logger import LogManager, logger
 
 
@@ -76,3 +79,32 @@ def test_log_level_and_other_handlers_are_preserved(log_settings):
     content = log_settings.file_path.read_text()
     assert "Filtered debug record" not in content
     assert "Visible info record" in content
+
+
+def test_database_debug_logs_do_not_include_chat_content(log_settings):
+    settings = log_settings.model_copy(update={"level": "DEBUG"})
+    LogManager.configure(settings)
+    marker = "private-chat-content-must-not-be-logged"
+
+    async def check():
+        store = SQLiteSessionRepository(
+            paths.get_database_path(), max_sessions=1, busy_timeout_seconds=1
+        )
+        try:
+            await store.initialize()
+            await store.save(
+                Session("one", marker, "2026-09-18", (Message("user", marker),))
+            )
+            assert (await store.get("one")).title == marker
+        finally:
+            await store.aclose()
+
+    asyncio.run(check())
+    logger.debug("Visible application debug")
+    logging.getLogger("sqlalchemy.engine.Engine").info("SQL parameters: %s", marker)
+    logging.getLogger("aiosqlite").warning("Visible database warning")
+    LogManager.shutdown()
+    content = settings.file_path.read_text()
+    assert marker not in content
+    assert "Visible application debug" in content
+    assert "Visible database warning" in content
