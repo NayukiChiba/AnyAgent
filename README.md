@@ -26,15 +26,20 @@ uv run main.py
 ```json
 {
   "enabled": true,
+  "streaming": true,
   "base_url": "https://your-provider.example/v1",
   "model": "your-model-name",
   "api_key": "your-api-key",
   "temperature": 0.7,
-  "timeout_seconds": 60
+  "timeout_seconds": 60,
+  "max_retries": 0,
+  "stream_usage": false
 }
 ```
 
 兼容服务需要支持 Chat Completions、流式响应和工具调用。`base_url` 填接口前缀，由 SDK 追加 `/chat/completions`；本地无认证服务可以填写占位密钥，例如 `local`。模型名和地址均由你定义。
+
+`streaming: true` 启用模型文本增量，`false` 使用上游非流式请求并等待完整回复。两种模式都保留工具调用与最终结果，HTTP/SSE 和 WebSocket 均可使用；该开关控制模型输出模式，连接方式由页面选择。`max_retries` 控制 SDK 重试次数；`stream_usage` 仅在兼容服务支持流式用量信息时开启。
 
 每次新执行重新读取模型 JSON，无需重启；正在运行的请求使用自己的配置快照。API Key 只保存在后端配置中，状态接口不返回密钥。无效配置按现有加载规范先备份再恢复默认值；默认模型禁用，不会自动调用模型服务。
 
@@ -42,7 +47,7 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 
 ## Vue 3 Agent 工作台
 
-页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认使用 WebSocket，也可在页面切换至 HTTP · SSE。模型 JSON 保存后点击“刷新配置”，即可使用新的连接配置；密钥不发送给浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
+页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认连接从 `data/configs/frontend_config.json` 的 `default_transport` 读取（`websocket` 或 `http`），也可在页面切换。该文件中的 `cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。页面显示模型的“流式输出”或“非流式输出”模式；保存模型 JSON 后刷新配置即可更新。模型 JSON 保存后点击“刷新配置”，即可使用新的连接配置；密钥不发送给浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
 
 前端依赖与源码独立放在 `frontend/`。开发时启动后端，再在 frontend 运行 `npm run dev`，Vite 将 `/api` 和 `/ws` 转发到本地 `8000` 端口；监听其他端口时修改 frontend 的 Vite proxy。
 
@@ -75,10 +80,11 @@ WebSocket 发送 `{"type":"message","content":"请使用工具计算 2+3"}`，�
 - `data/configs/cmd_config.json`：数据路径和监听参数，修改后重启。
 - `data/configs/logging_config.json`：队列日志、级别和轮转参数，修改后重启。
 - `data/configs/model_config.json`：模型连接与密钥，新执行热重载。
-- `data/configs/langchain_config.json`：Agent prompt 与执行限制，修改后重启。
+- `data/configs/langchain_config.json`：Agent prompt、步骤、历史、并发、输入/输出/事件大小和清理时限，修改后重启。
+- `data/configs/frontend_config.json`：前端默认连接和取消确认等待时间；刷新配置读取，默认连接在重新加载页面时采用。
 - `data/logs/anyagent.log`：应用和服务器日志。
 
-缺失配置独立创建默认值；格式、字段或路径无效时，原文件备份为 `data/configs/<文件名>.<时间戳>.bak`，仅恢复该类型。权限错误直接报告。旧 `data/config.json` 自动拆分迁移，已有新文件优先。
+缺失配置独立创建默认值；已有有效 JSON 自动补齐新增默认项，保留显式值与密钥，完整配置不重复写入；格式、字段或路径无效时，原文件备份为 `data/configs/<文件名>.<时间戳>.bak`，仅恢复该类型。权限错误直接报告。旧 `data/config.json` 自动拆分迁移，已有新文件优先。
 
 ```text
 anyagent/

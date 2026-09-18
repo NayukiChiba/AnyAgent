@@ -7,7 +7,7 @@ const sessions = ref([])
 const currentId = ref('')
 const messages = ref([])
 const input = ref('')
-const transport = ref('websocket')
+const transport = ref('')
 const busy = ref(false)
 const loading = ref(true)
 const notice = ref('')
@@ -30,6 +30,7 @@ async function scrollToEnd() {
 async function refreshAgent() {
   try {
     agent.value = await request('/api/v1/agent')
+    if (!transport.value) transport.value = agent.value.frontend.default_transport
   } catch (error) {
     notice.value = error.message
   }
@@ -85,6 +86,7 @@ async function send() {
   messages.value.push({ role: 'user', content }, { role: 'assistant', content: '' })
   await scrollToEnd()
   try {
+    await refreshAgent()
     const stream = transport.value === 'websocket' ? streamWebSocket : streamHttp
     await stream(
       currentId.value,
@@ -100,6 +102,7 @@ async function send() {
         scrollToEnd()
       },
       controller.signal,
+      { cancelTimeoutMs: agent.value.frontend.cancel_timeout_ms },
     )
   } catch (error) {
     notice.value = error.name === 'AbortError' ? '已停止生成，本轮未写入会话历史。' : error.message
@@ -194,6 +197,9 @@ onBeforeUnmount(stop)
         <div>
           <span class="model-icon">◈</span><strong>{{ agent?.model || '尚未选择模型' }}</strong
           ><span class="provider">OpenAI Compatible</span>
+          <span v-if="agent" class="output-mode">{{
+            agent.streaming ? '流式输出' : '非流式输出'
+          }}</span>
         </div>
         <div class="connection-controls">
           <label for="transport">连接方式</label
@@ -264,7 +270,7 @@ onBeforeUnmount(stop)
             v-model="input"
             placeholder="输入消息，与 Agent 一起解决问题…"
             rows="2"
-            maxlength="8000"
+            :maxlength="agent?.limits.max_input_chars"
             :disabled="busy || loading"
             @keydown="handleKey"
           ></textarea>

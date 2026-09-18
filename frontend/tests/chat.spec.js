@@ -51,3 +51,19 @@ for (const transport of ['websocket', 'http']) {
     await expect(page.locator('.assistant .message-text')).toHaveText('结果是 5')
   })
 }
+
+test('JSON preferences and non-streaming model mode reach the Vue workspace', async ({ page }) => {
+  await page.route('**/api/v1/agent', async (route) => {
+    const response = await route.fetch()
+    const status = await response.json()
+    status.streaming = false
+    status.frontend.default_transport = 'http'
+    status.frontend.cancel_timeout_ms = 2000
+    status.limits.max_input_chars = 100
+    await route.fulfill({ response, json: status })
+  })
+  await page.goto('/')
+  await expect(page.getByText('非流式输出', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('连接方式')).toHaveValue('http')
+  await expect(page.getByLabel('消息内容')).toHaveAttribute('maxlength', '100')
+})

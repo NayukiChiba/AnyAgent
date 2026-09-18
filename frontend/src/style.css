@@ -672,3 +672,12 @@ code {
     font-size: 8px;
   }
 }
+
+.output-mode {
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: #edf1fb;
+  color: #6880b7;
+  font-size: 10px;
+  white-space: nowrap;
+}

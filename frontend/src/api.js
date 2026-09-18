@@ -63,7 +63,7 @@ export async function streamHttp(sessionId, content, onEvent, signal) {
   }
 }
 
-export function streamWebSocket(sessionId, content, onEvent, signal) {
+export function streamWebSocket(sessionId, content, onEvent, signal, { cancelTimeoutMs }) {
   return new Promise((resolve, reject) => {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const socket = new WebSocket(`${protocol}//${location.host}/ws/sessions/${sessionId}`)
@@ -81,7 +81,10 @@ export function streamWebSocket(sessionId, content, onEvent, signal) {
     const cancel = () => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'cancel' }))
-        cancelTimer = setTimeout(() => finish(new DOMException('已停止生成', 'AbortError')), 1500)
+        cancelTimer = setTimeout(
+          () => finish(new DOMException('已停止生成', 'AbortError')),
+          cancelTimeoutMs,
+        )
       } else finish(new DOMException('已停止生成', 'AbortError'))
     }
     signal.addEventListener('abort', cancel, { once: true })
