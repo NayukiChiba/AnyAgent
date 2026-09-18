@@ -36,6 +36,19 @@ class Factory:
         return self.next
 
 
+def configured_service(repository, factory, **overrides):
+    limits = {
+        "timeout_seconds": 120,
+        "max_concurrent_runs": 4,
+        "max_history_messages": 40,
+        "max_input_chars": 8000,
+        "max_output_chars": 32000,
+        "max_event_chars": 64000,
+        "cleanup_timeout_seconds": 5,
+    }
+    return ChatService(repository, factory, **(limits | overrides))
+
+
 async def collect(service, session_id, content="你好"):
     async with aclosing(service.stream(session_id, content)) as events:
         return [event async for event in events]
@@ -45,7 +58,7 @@ def test_success_failure_isolation_and_history_window():
     async def check():
         repository = MemorySessionRepository(max_sessions=2)
         factory = Factory()
-        service = ChatService(repository, factory, max_history_messages=4)
+        service = configured_service(repository, factory, max_history_messages=4)
         session = await service.create_session()
         other = await service.create_session()
         with pytest.raises(ChatError, match="会话数量"):
@@ -80,7 +93,7 @@ def test_busy_cancel_timeout_and_cleanup():
         repository = MemorySessionRepository()
         factory = Factory()
         factory.next = Runner(gate=asyncio.Event())
-        service = ChatService(
+        service = configured_service(
             repository, factory, max_concurrent_runs=1, timeout_seconds=0.05
         )
         session = await service.create_session()
@@ -129,7 +142,7 @@ def test_disconnect_during_cleanup_keeps_owned_disposal_alive():
 
         factory = Factory()
         factory.next = SlowCloseRunner()
-        service = ChatService(MemorySessionRepository(), factory)
+        service = configured_service(MemorySessionRepository(), factory)
         session = await service.create_session()
         task = asyncio.create_task(collect(service, session.id))
         await started.wait()
@@ -155,9 +168,25 @@ def test_cleanup_failure_does_not_replace_successful_result():
         factory = Factory()
         factory.next = FailedCloseRunner()
         repository = MemorySessionRepository()
-        service = ChatService(repository, factory)
+        service = configured_service(repository, factory)
         session = await service.create_session()
         assert (await collect(service, session.id))[-1].type == "result"
         assert len((await repository.get(session.id)).messages) == 2
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("limits", [{"max_output_chars": 1}, {"max_event_chars": 1}])
+def test_injected_output_limits_prevent_history_commit(limits):
+    async def check():
+        repository = MemorySessionRepository()
+        factory = Factory()
+        service = configured_service(repository, factory, **limits)
+        session = await service.create_session()
+        with pytest.raises(ChatError) as failure:
+            await collect(service, session.id)
+        assert failure.value.code == "output_limit"
+        assert (await repository.get(session.id)).messages == ()
+        assert factory.next.closed
 
     asyncio.run(check())

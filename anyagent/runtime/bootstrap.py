@@ -6,7 +6,13 @@ from fastapi import FastAPI
 from anyagent.adapters.runners.langchain.runner import LangChainRunnerFactory
 from anyagent.api.app import build_app
 from anyagent.api.frontend import install_frontend
-from anyagent.configs import config, load_langchain_config, load_model_config, paths
+from anyagent.configs import (
+    config,
+    load_frontend_config,
+    load_langchain_config,
+    load_model_config,
+    paths,
+)
 from anyagent.configs.agent import LangChainSettings
 from anyagent.core.ports.chat import RunnerFactory
 from anyagent.core.services.chat import ChatService
@@ -26,6 +32,7 @@ def create_app(
         app.state.config = config
         settings = agent_settings or load_langchain_config()
         load_model_config()
+        load_frontend_config()
         repository = MemorySessionRepository(max_sessions=settings.max_sessions)
         app.state.chat_service = ChatService(
             repository,
@@ -33,6 +40,10 @@ def create_app(
             timeout_seconds=settings.run_timeout_seconds,
             max_history_messages=settings.max_history_messages,
             max_concurrent_runs=settings.max_concurrent_runs,
+            max_input_chars=settings.max_input_chars,
+            max_output_chars=settings.max_output_chars,
+            max_event_chars=settings.max_event_chars,
+            cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
         )
 
         def agent_info() -> dict:
@@ -42,6 +53,9 @@ def create_app(
                 "configured": connection.enabled,
                 "model": connection.model,
                 "base_url": connection.base_url,
+                "streaming": connection.streaming,
+                "limits": {"max_input_chars": settings.max_input_chars},
+                "frontend": load_frontend_config().model_dump(),
                 "storage": "memory",
                 "transports": ["http", "websocket", "sse"],
                 "tools": ["calculate"],

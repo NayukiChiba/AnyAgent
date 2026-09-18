@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import stat
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from anyagent.configs import default, paths
-from anyagent.configs.agent import LangChainSettings, ModelSettings
+from anyagent.configs.agent import FrontendSettings, LangChainSettings, ModelSettings
 from anyagent.configs.models import CmdConfig, LoggingSettings
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,12 @@ def _fill_defaults(values: dict, defaults: dict) -> dict:
 def _save_update(path: Path, values: dict) -> None:
     temporary = paths.get_config_update_path(path, time.time_ns())
     try:
-        with temporary.open("x", encoding="utf-8") as file:
+        mode = stat.S_IMODE(path.stat().st_mode)
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
             json.dump(values, file, ensure_ascii=False, indent=2)
             file.write("\n")
-        temporary.chmod(stat.S_IMODE(path.stat().st_mode))
+        temporary.chmod(mode)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -77,7 +80,7 @@ def load_config(name: str, schema: type[Model], defaults: dict) -> Model:
         return fallback
     merged = _fill_defaults(values, defaults)
     if merged != values:
-        schema.model_validate(merged)
+        loaded = schema.model_validate(merged)
         _save_update(path, merged)
     return loaded
 
@@ -100,6 +103,12 @@ def load_model_config() -> ModelSettings:
 def load_langchain_config() -> LangChainSettings:
     return load_config(
         "langchain_config", LangChainSettings, default.DEFAULT_LANGCHAIN_CONFIG
+    )
+
+
+def load_frontend_config() -> FrontendSettings:
+    return load_config(
+        "frontend_config", FrontendSettings, default.DEFAULT_FRONTEND_CONFIG
     )
 
 

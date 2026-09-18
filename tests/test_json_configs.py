@@ -286,3 +286,15 @@ def test_default_update_failure_preserves_original_config(config_dir, monkeypatc
     assert file.read_text() == "{}"
     assert not list(config_dir.glob("*.bak"))
     assert not list(config_dir.glob(".*.tmp"))
+
+
+def test_filled_values_are_used_in_the_same_load(config_dir):
+    class ExtensionConfig(BaseSettings):
+        enabled: bool = False
+
+    config_dir.mkdir(parents=True)
+    file = config_dir / "extension_config.json"
+    file.write_text("{}")
+    loaded = load_config("extension_config", ExtensionConfig, {"enabled": True})
+    assert loaded.enabled
+    assert json.loads(file.read_text()) == {"enabled": True}

@@ -46,3 +46,9 @@ def test_model_connections_reload_and_recover_independently(tmp_path, monkeypatc
 def test_invalid_model_config_is_rejected(values):
     with pytest.raises(ValidationError):
         ModelSettings.model_validate(values)
+
+
+@pytest.mark.parametrize("value", ["false", 0, 1, None])
+def test_streaming_switch_requires_json_boolean(value):
+    with pytest.raises(ValidationError):
+        ModelSettings(streaming=value)

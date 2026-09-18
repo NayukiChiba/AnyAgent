@@ -20,15 +20,23 @@ class ChatService:
         repository: SessionRepository,
         runners: RunnerFactory,
         *,
-        timeout_seconds: float = 120,
-        max_concurrent_runs: int = 4,
-        max_history_messages: int = 40,
+        timeout_seconds: float,
+        max_concurrent_runs: int,
+        max_history_messages: int,
+        max_input_chars: int,
+        max_output_chars: int,
+        max_event_chars: int,
+        cleanup_timeout_seconds: float,
     ):
         self.repository = repository
         self.runners = runners
         self.timeout_seconds = timeout_seconds
         self.max_concurrent_runs = max_concurrent_runs
         self.max_history_messages = max_history_messages // 2 * 2
+        self.max_input_chars = max_input_chars
+        self.max_output_chars = max_output_chars
+        self.max_event_chars = max_event_chars
+        self.cleanup_timeout_seconds = cleanup_timeout_seconds
         self._active: dict[str, asyncio.Task] = {}
         self._closing: set[asyncio.Task] = set()
 
@@ -47,7 +55,7 @@ class ChatService:
 
         Args:
             session_id: Existing session identifier.
-            content: User message, bounded to 8000 characters.
+            content: User message, bounded by the injected input limit.
 
         Yields:
             Normalized deltas and tool events, followed by one committed result.
@@ -55,9 +63,7 @@ class ChatService:
         Raises:
             ChatError: The session, capacity, model or execution is unavailable.
         """
-        content = content.strip()
-        if not content or len(content) > 8000:
-            raise ChatError("invalid_message", "消息不能为空，且不能超过 8000 个字符")
+        content = self.validate_message(content)
         if session_id in self._active:
             raise ChatError("session_busy", "这个会话已有执行中的请求")
         if len(self._active) >= self.max_concurrent_runs:
@@ -79,14 +85,14 @@ class ChatService:
                             result = event.data.get("content")
                         else:
                             output_size += len(str(event.data))
-                            if output_size > 64000:
+                            if output_size > self.max_event_chars:
                                 raise ChatError(
                                     "output_limit", "模型输出超过单次执行限制"
                                 )
                             yield event
                 if not isinstance(result, str) or not result.strip():
                     raise ChatError("runner_failed", "模型未返回有效回复")
-                if len(result) > 32000:
+                if len(result) > self.max_output_chars:
                     raise ChatError("output_limit", "模型回复超过长度限制")
                 messages = (session.messages + (user, Message("assistant", result)))[
                     -self.max_history_messages :
@@ -118,7 +124,7 @@ class ChatService:
     async def _dispose(self, runner: AgentRunner) -> None:
         async def close():
             try:
-                async with asyncio.timeout(5):
+                async with asyncio.timeout(self.cleanup_timeout_seconds):
                     await runner.aclose()
             except Exception as exc:
                 logger.warning("Runner cleanup failed: %s", type(exc).__name__)
@@ -128,6 +134,15 @@ class ChatService:
         task.add_done_callback(self._closing.discard)
         # Disconnect cancellation must not interrupt disposal of owned connections.
         await asyncio.shield(task)
+
+    def validate_message(self, content: str) -> str:
+        content = content.strip()
+        if not content or len(content) > self.max_input_chars:
+            raise ChatError(
+                "invalid_message",
+                f"消息不能为空，且不能超过 {self.max_input_chars} 个字符",
+            )
+        return content
 
     async def shutdown(self) -> None:
         tasks = set(self._active.values()) - {asyncio.current_task()}

@@ -52,6 +52,49 @@ def open_model_endpoint():
                     },
                 ]
                 finish = "tool_calls"
+            if not body.get("stream", False):
+                if finish == "tool_calls":
+                    message = {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_add",
+                                "type": "function",
+                                "function": {
+                                    "name": "calculate",
+                                    "arguments": '{"operation":"add","a":2,"b":3}',
+                                },
+                            }
+                        ],
+                    }
+                else:
+                    message = {"role": "assistant", "content": "结果是 5"}
+                payload = json.dumps(
+                    {
+                        "id": "chatcmpl-local",
+                        "object": "chat.completion",
+                        "created": 1,
+                        "model": body["model"],
+                        "choices": [
+                            {"index": 0, "message": message, "finish_reason": finish}
+                        ],
+                        "usage": {
+                            "prompt_tokens": 10,
+                            "completion_tokens": 3,
+                            "total_tokens": 13,
+                        },
+                    }
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                try:
+                    self.wfile.write(payload)
+                except OSError:
+                    pass
+                return
             chunks = [
                 {
                     "id": "chatcmpl-local",

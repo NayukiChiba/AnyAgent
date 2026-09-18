@@ -53,13 +53,19 @@ def text_content(content: str | list) -> str:
 
 class LangChainRunner:
     def __init__(
-        self, model: BaseChatModel, settings: LangChainSettings, *, clients: tuple = ()
+        self,
+        model: BaseChatModel,
+        settings: LangChainSettings,
+        *,
+        streaming: bool,
+        clients: tuple = (),
     ):
         self.agent = create_agent(
             model, tools=[calculate], system_prompt=settings.system_prompt
         )
         self.max_steps = settings.max_steps
         self.clients = clients
+        self.streaming = streaming
 
     async def stream(self, messages: tuple[Message, ...]) -> AsyncIterator[Event]:
         final = ""
@@ -71,7 +77,7 @@ class LangChainRunner:
                 ]
             },
             config={"recursion_limit": self.max_steps},
-            stream_mode=["messages", "updates"],
+            stream_mode=["messages", "updates"] if self.streaming else ["updates"],
         )
         async with aclosing(source):
             async for mode, payload in source:
@@ -147,15 +153,19 @@ class LangChainRunnerFactory:
                 api_key=connection.api_key.get_secret_value(),
                 temperature=connection.temperature,
                 timeout=connection.timeout_seconds,
-                max_retries=0,
-                streaming=True,
-                stream_usage=False,
+                max_retries=connection.max_retries,
+                streaming=connection.streaming,
+                disable_streaming=not connection.streaming,
+                stream_usage=connection.stream_usage,
                 use_responses_api=False,
                 http_client=sync_client,
                 http_async_client=async_client,
             )
             return LangChainRunner(
-                model, self.settings, clients=(async_client, sync_client)
+                model,
+                self.settings,
+                streaming=connection.streaming,
+                clients=(async_client, sync_client),
             )
         except BaseException:
             try:

@@ -22,11 +22,14 @@ DEFAULT_CONFIGS = {
 
 DEFAULT_MODEL_CONFIG = {
     "enabled": False,
+    "streaming": True,
     "base_url": "https://api.openai.com/v1",
     "model": "",
     "api_key": "",
     "temperature": 0.7,
     "timeout_seconds": 60,
+    "max_retries": 0,
+    "stream_usage": False,
 }
 DEFAULT_LANGCHAIN_CONFIG = {
     "system_prompt": "You are a helpful assistant. Use the calculate tool for arithmetic.",
@@ -35,9 +38,16 @@ DEFAULT_LANGCHAIN_CONFIG = {
     "max_history_messages": 40,
     "max_concurrent_runs": 4,
     "run_timeout_seconds": 120,
+    "max_input_chars": 8000,
+    "max_output_chars": 32000,
+    "max_event_chars": 64000,
+    "cleanup_timeout_seconds": 5,
 }
+DEFAULT_FRONTEND_CONFIG = {"default_transport": "websocket", "cancel_timeout_ms": 1500}
 DEFAULT_CONFIGS.update(
-    model_config=DEFAULT_MODEL_CONFIG, langchain_config=DEFAULT_LANGCHAIN_CONFIG
+    model_config=DEFAULT_MODEL_CONFIG,
+    langchain_config=DEFAULT_LANGCHAIN_CONFIG,
+    frontend_config=DEFAULT_FRONTEND_CONFIG,
 )
 
 

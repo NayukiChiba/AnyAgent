@@ -18,7 +18,7 @@ router = APIRouter()
 
 class MessageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    content: str = Field(min_length=1, max_length=8000)
+    content: str = Field(min_length=1)
 
     @field_validator("content")
     @classmethod
@@ -115,6 +115,7 @@ async def stream_message(
 ) -> StreamingResponse:
     try:
         await service(request).repository.get(session_id)
+        service(request).validate_message(body.content)
     except ChatError as error:
         raise http_error(error) from error
 
