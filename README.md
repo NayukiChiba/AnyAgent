@@ -15,13 +15,21 @@ cd ..
 uv run main.py
 ```
 
-前端首次构建后，`main.py` 同时提供 FastAPI 和 Vue 3 聊天页面，无需单独启动前端服务。修改前端源码后重新构建即可；构建产物不提交 Git。服务默认监听 `127.0.0.1:8000`，聊天页面位于 <http://127.0.0.1:8000/>，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
+前端首次构建后，`main.py` 同时提供 FastAPI、Vue 3 聊天页面和独立设置页面，无需单独启动前端服务。修改前端源码后重新构建即可；构建产物不提交 Git。服务默认监听 `127.0.0.1:8000`，聊天页面位于 <http://127.0.0.1:8000/>，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
 
 源码通过根目录 `anyagent/` 模块直接运行；uv 只管理依赖，不安装项目本身或生成 `egg-info`。
 
 ## 模型配置与热重载
 
-首次启动会创建 `data/configs/model_config.json`。填写自己的 OpenAI 兼容服务：
+首次启动后，在聊天页面点击“设置”，或打开 <http://127.0.0.1:8000/settings>：
+
+1. 在“模型连接”填写服务商提供的接口地址、模型名称和 API Key。
+2. 开启“启用模型”，选择流式或非流式输出，点击“保存设置”。
+3. 点击“测试已保存的连接”，成功后返回聊天。测试会调用模型确认连接，不写入聊天历史。
+
+无需编辑配置文件。设置页面还可调整 Agent 行为、网页偏好、日志和服务参数；高级项默认收起，各组注明生效时间。输入错误不覆盖原配置，离开未保存的表单会提醒，多个页面同时编辑时会检测保存冲突。保存密钥后网页不回显，留空保留原密钥，清除需单独选择。
+
+实际设置仍保存在 `data/configs/` 分类 JSON 中。需要手动部署时，可编辑 `model_config.json`：
 
 ```json
 {
@@ -37,7 +45,7 @@ uv run main.py
 }
 ```
 
-兼容服务需要支持 Chat Completions、流式响应和工具调用。`base_url` 填接口前缀，由 SDK 追加 `/chat/completions`；本地无认证服务可以填写占位密钥，例如 `local`。模型名和地址均由你定义。
+兼容服务需要支持 Chat Completions 和工具调用；开启流式输出时还需支持流式响应。`base_url` 填接口前缀，由 SDK 追加 `/chat/completions`；本地无认证服务可以填写占位密钥，例如 `local`。模型名和地址均由你定义。
 
 `streaming: true` 启用模型文本增量，`false` 使用上游非流式请求并等待完整回复。两种模式都保留工具调用与最终结果，HTTP/SSE 和 WebSocket 均可使用；该开关控制模型输出模式，连接方式由页面选择。`max_retries` 控制 SDK 重试次数；`stream_usage` 仅在兼容服务支持流式用量信息时开启。
 
@@ -47,7 +55,7 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 
 ## Vue 3 Agent 工作台
 
-页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认连接从 `data/configs/frontend_config.json` 的 `default_transport` 读取（`websocket` 或 `http`），也可在页面切换。该文件中的 `cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。页面显示模型的“流式输出”或“非流式输出”模式；保存模型 JSON 后刷新配置即可更新。模型 JSON 保存后点击“刷新配置”，即可使用新的连接配置；密钥不发送给浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
+页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认连接从 `data/configs/frontend_config.json` 的 `default_transport` 读取（`websocket` 或 `http`），也可在页面切换。该文件中的 `cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。页面显示模型的“流式输出”或“非流式输出”模式；设置中保存模型后返回聊天，即读取最新状态。手动修改 JSON 后也可点击“刷新配置”；已保存密钥不返回浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
 
 前端依赖与源码独立放在 `frontend/`。开发时启动后端，再在 frontend 运行 `npm run dev`，Vite 将 `/api` 和 `/ws` 转发到本地 `8000` 端口；监听其他端口时修改 frontend 的 Vite proxy。
 
@@ -55,6 +63,9 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 
 | 接口 | 用途 |
 | --- | --- |
+| `GET /api/v1/settings` | 五组设置及表单信息，密钥隐藏 |
+| `PUT /api/v1/settings/{name}` | 校验并保存一组配置，需携带载入时的 revision |
+| `POST /api/v1/settings/model_config/test` | 测试已保存模型的实际连接 |
 | `GET /api/v1/agent` | 模型配置状态、Runner、工具和连接方式 |
 | `GET /api/v1/sessions` | 会话列表 |
 | `POST /api/v1/sessions` | 创建会话 |

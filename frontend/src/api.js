@@ -5,7 +5,10 @@ export async function request(path, options = {}) {
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    throw new Error(body.detail?.message || `请求失败 (${response.status})`)
+    const error = new Error(body.detail?.message || `请求失败 (${response.status})`)
+    error.fields = body.detail?.fields || {}
+    error.status = response.status
+    throw error
   }
   return response.status === 204 ? null : response.json()
 }
