@@ -1,0 +1,216 @@
+.markdown-body,
+.message-text.markdown-body {
+  white-space: normal;
+  min-width: 0;
+}
+.markdown-body > div > :first-child {
+  margin-top: 0;
+}
+.markdown-body > div > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body p {
+  margin: 0 0 0.85em;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  color: #25354f;
+  font-weight: 650;
+  line-height: 1.45;
+  margin: 1.2em 0 0.6em;
+}
+.markdown-body h1 {
+  font-size: 1.65em;
+}
+.markdown-body h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #e4eaf3;
+}
+.markdown-body h3 {
+  font-size: 1.2em;
+}
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 1em;
+}
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.6em;
+  margin: 0.6em 0 1em;
+}
+.markdown-body li {
+  margin: 0.3em 0;
+}
+.markdown-body li > p {
+  margin-bottom: 0.3em;
+}
+.markdown-body a {
+  color: #416dc5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.markdown-body a:focus-visible,
+.markdown-body button:focus-visible,
+.markdown-table:focus-visible {
+  outline: 2px solid #7292e6;
+  outline-offset: 3px;
+}
+.markdown-body blockquote {
+  border-left: 3px solid #93abe5;
+  margin: 0.8em 0;
+  padding: 0.5em 1em;
+  color: #63738c;
+  background: #f5f7fc;
+  border-radius: 0 8px 8px 0;
+}
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid #dfe6f1;
+  margin: 1.2em 0;
+}
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.markdown-body :not(pre) > code {
+  background: #edf2fa;
+  color: #4c5f88;
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+.markdown-code {
+  margin: 0.9em 0;
+  border: 1px solid #dce4f1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+.markdown-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #e1e7f1;
+  color: #687995;
+  font-size: 11px;
+  background: #edf2fa;
+}
+.markdown-code-header > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.markdown-copy {
+  flex-shrink: 0;
+  border: 1px solid #d0dbed;
+  border-radius: 5px;
+  background: #fff;
+  padding: 4px 8px;
+  color: #4b638e;
+  font: inherit;
+  cursor: pointer;
+}
+.markdown-copy:hover {
+  background: #e3ebfb;
+}
+.markdown-body pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0.8em 0;
+  padding: 14px;
+  background: #f6f8fc;
+  border-radius: 8px;
+}
+.markdown-code pre {
+  margin: 0;
+  border-radius: 0;
+}
+.markdown-body pre code {
+  display: block;
+  padding: 0;
+  background: none;
+  color: #384864;
+  font:
+    12.5px/1.7 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-selector-tag {
+  color: #8253ae;
+}
+.markdown-body .hljs-string,
+.markdown-body .hljs-attr {
+  color: #287456;
+}
+.markdown-body .hljs-number,
+.markdown-body .hljs-literal {
+  color: #ab622b;
+}
+.markdown-body .hljs-title,
+.markdown-body .hljs-built_in {
+  color: #336caa;
+}
+.markdown-body .hljs-comment {
+  color: #8392a5;
+  font-style: italic;
+}
+.markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.9em 0;
+  border: 1px solid #dce4f1;
+  border-radius: 8px;
+}
+.markdown-table table {
+  border-collapse: collapse;
+  min-width: 100%;
+  width: max-content;
+  font-size: 13px;
+}
+.markdown-table th,
+.markdown-table td {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f2;
+  max-width: 440px;
+}
+.markdown-table th {
+  color: #425878;
+  background: #edf2fa;
+  font-weight: 600;
+}
+.markdown-table tr:nth-child(even) td {
+  background: #f8faff;
+}
+.markdown-body .markdown-copy-notice {
+  margin-top: 8px;
+  color: #5573a0;
+  font-size: 12px;
+}
+
+.markdown-table [data-align='left'] {
+  text-align: left;
+}
+.markdown-table [data-align='center'] {
+  text-align: center;
+}
+.markdown-table [data-align='right'] {
+  text-align: right;
+}

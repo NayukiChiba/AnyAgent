@@ -16,6 +16,9 @@
     "format:check": "prettier --check src tests *.js index.html package.json .prettierrc.json"
   },
   "dependencies": {
+    "dompurify": "^3.4.15",
+    "highlight.js": "^11.12.0",
+    "markdown-it": "^15.0.2",
     "vue": "^3.5.0",
     "vue-router": "^4.6.4"
   },

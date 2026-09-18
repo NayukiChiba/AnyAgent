@@ -2,6 +2,7 @@
 import { onBeforeRouteLeave } from 'vue-router'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import SettingSelect from '../components/SettingSelect.vue'
+import MarkdownMessage from '../components/MarkdownMessage.vue'
 import { request, streamHttp, streamWebSocket } from '../api.js'
 
 const agent = ref(null)
@@ -266,7 +267,14 @@ onBeforeRouteLeave(
             <span class="message-author">{{
               message.role === 'user' ? '你' : 'LangChain Agent'
             }}</span>
-            <div class="message-text">{{ message.content || (busy ? '正在思考…' : '') }}</div>
+            <MarkdownMessage
+              v-if="message.role === 'assistant' && message.content"
+              class="message-text"
+              :content="message.content"
+            />
+            <div v-else class="message-text">
+              {{ message.content || (busy ? '正在思考…' : '') }}
+            </div>
             <span v-if="busy && index === messages.length - 1" class="typing-indicator">● ● ●</span>
           </div>
         </article>
