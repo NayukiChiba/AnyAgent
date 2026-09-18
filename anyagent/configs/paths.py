@@ -56,6 +56,17 @@ def resolve_data_path(value: str | Path) -> Path:
     return path
 
 
+def resolve_data_directory(value: str | Path) -> Path:
+    """Validate a data directory without creating it or accepting file ancestors."""
+    path = resolve_data_path(value)
+    for directory in (path, *path.parents):
+        if not directory.is_relative_to(get_data_dir()):
+            break
+        if directory.exists() and not directory.is_dir():
+            raise ValueError("Data directories cannot refer to files")
+    return path
+
+
 def get_configs_dir() -> Path:
     """Return the configuration directory, rejecting symlinks outside data."""
     return resolve_data_path(CONFIGS_DIR)
@@ -80,8 +91,9 @@ def get_log_path(value: str | Path | None = None) -> Path:
     """
     directory = get_logs_dir()
     path = resolve_data_path(directory / "anyagent.log" if value is None else value)
-    if path == directory or not path.is_relative_to(directory):
+    if path.is_dir() or path == directory or not path.is_relative_to(directory):
         raise ValueError("Logging files must stay inside the logging directory")
+    resolve_data_directory(path.parent)
     return path
 
 

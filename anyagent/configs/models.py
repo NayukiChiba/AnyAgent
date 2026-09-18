@@ -17,7 +17,7 @@ class PathSettings(BaseSettings):
     @field_validator("data_dir")
     @classmethod
     def resolve_data_dir(cls, value: Path) -> Path:
-        return paths.resolve_data_path(value)
+        return paths.resolve_data_directory(value)
 
 
 class ServerSettings(BaseSettings):

@@ -217,3 +217,29 @@ def test_connection_probe_uses_saved_sdk_config_without_chat_history(
     assert response.status_code == 503
     assert "probe-secret" not in response.text
     assert client.get("/api/v1/sessions").json() == []
+
+
+def test_existing_file_and_directory_paths_are_rejected(settings_client):
+    path = paths.get_config_path("cmd_config")
+    original = path.read_bytes()
+    for invalid in [
+        "data/configs/cmd_config.json",
+        "data/configs/cmd_config.json/child",
+    ]:
+        response = save(settings_client, "cmd_config", {"paths": {"data_dir": invalid}})
+        assert response.status_code == 422
+        assert path.read_bytes() == original
+    logs = paths.get_logs_dir()
+    nested = logs / "existing-directory"
+    nested.mkdir(parents=True)
+    path = paths.get_config_path("logging_config")
+    original = path.read_bytes()
+    for invalid in [
+        "data/logs/existing-directory",
+        "data/logs/existing-directory/log.txt/child.log",
+    ]:
+        if invalid.endswith("child.log"):
+            (nested / "log.txt").write_text("existing log")
+        response = save(settings_client, "logging_config", {"file_path": invalid})
+        assert response.status_code == 422
+        assert path.read_bytes() == original

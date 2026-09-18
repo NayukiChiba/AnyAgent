@@ -109,7 +109,9 @@ class ConfigurationManager:
                 elif error["type"] == "extra_forbidden":
                     fields[path] = "包含无法识别的设置项，请重新载入页面"
                 elif path in {"paths.data_dir", "file_path"}:
-                    fields[path] = f"{label}必须位于指定的数据目录内"
+                    fields[path] = (
+                        f"{label}必须位于指定的数据目录内，且目录不能当作文件、文件不能当作目录"
+                    )
                 elif path == "base_url":
                     fields[path] = (
                         "请填写有效的 HTTP 或 HTTPS 接口前缀，不包含密钥、查询参数或片段"
