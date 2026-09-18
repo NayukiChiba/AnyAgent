@@ -21,7 +21,7 @@ uv run main.py
 
 ## 模型配置与热重载
 
-首次启动后，在聊天页面点击“设置”，或打开 <http://127.0.0.1:8000/settings>：
+首次启动后，在聊天页左侧栏底部点击“设置”，或打开 <http://127.0.0.1:8000/settings>：
 
 1. 在“模型连接”填写服务商提供的接口地址、模型名称和 API Key。
 2. 开启“启用模型”，选择流式或非流式输出，点击“保存设置”。
@@ -59,6 +59,12 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 
 前端依赖与源码独立放在 `frontend/`。开发时启动后端，再在 frontend 运行 `npm run dev`，Vite 将 `/api` 和 `/ws` 转发到本地 `8000` 端口；监听其他端口时修改 frontend 的 Vite proxy。
 
+## 网页重启
+
+通过 `main.py` 启动后，设置页面下方提供“重启服务”。先保存或撤销草稿，再确认重启；服务清理连接与日志后重新执行入口，读取最新配置，内存聊天记录清空。网页等待新的服务就绪后重新打开设置，修改端口时跳转到新端口。重启前会检查新监听地址和端口，准备失败时保留当前服务。
+
+命令行 `--host`、`--port` 在重启后继续覆盖配置。`frontend_config.json` 的 `restart_poll_interval_ms`、`restart_wait_timeout_seconds` 控制网页检查间隔和等待时限，可在“网页偏好”的高级设置调整。外部 ASGI 启动不提供进程重启能力。
+
 ## Agent 接口
 
 | 接口 | 用途 |
@@ -66,6 +72,8 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 | `GET /api/v1/settings` | 五组设置及表单信息，密钥隐藏 |
 | `PUT /api/v1/settings/{name}` | 校验并保存一组配置，需携带载入时的 revision |
 | `POST /api/v1/settings/model_config/test` | 测试已保存模型的实际连接 |
+| `GET /api/v1/system` | 当前启动标识、就绪状态和重启能力 |
+| `POST /api/v1/system/restart` | 完整重启 main.py 服务，响应为 202 |
 | `GET /api/v1/agent` | 模型配置状态、Runner、工具和连接方式 |
 | `GET /api/v1/sessions` | 会话列表 |
 | `POST /api/v1/sessions` | 创建会话 |

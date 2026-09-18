@@ -10,7 +10,7 @@
 | `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 | `model_config.json` | OpenAI 兼容模型连接与密钥 | `load_model_config()`，新执行热重载 |
 | `langchain_config.json` | Agent prompt、历史与执行预算 | `load_langchain_config()`，启动时读取 |
-| `frontend_config.json` | 默认连接、取消确认等待时间 | `load_frontend_config()`，状态刷新时读取 |
+| `frontend_config.json` | 默认连接、取消确认与重启检查等待参数 | `load_frontend_config()`，状态刷新时读取 |
 
 配置代码位于 `anyagent/configs/`，属于应用的外层支撑模块。`base.py` 定义共享校验规则，`models.py` 定义基础配置模型，`agent.py` 定义模型连接与 LangChain 配置，`default.py` 定义默认值并创建 JSON，`paths.py` 集中处理路径，`load.py` 加载、校验和恢复分类 JSON，`catalog.py` 登记网页分组和字段信息，`management.py` 提供密钥隐藏、校验保存和版本冲突检查，`__init__.py` 导出共享对象。实际 JSON 和日志始终保存在项目根目录 data，不随代码迁入应用包。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
 

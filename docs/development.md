@@ -58,6 +58,14 @@ npm run test:e2e
 
 浏览器测试启动 `tests.e2e_server`，使用临时配置和本地 OpenAI 兼容协议夹具，不需要云端密钥。Python 和前端依赖都需提前安装。SDK 测试同样使用该夹具，检查工具调用交回模型、配置热重载和多轮历史；夹具成功不代表真实服务已验收。
 
+## 重启生命周期
+
+`main.py` 持有 Uvicorn Server，注入 runtime 的 RestartController；API 请求只登记一次重启，响应发出后的任务设置服务器退出标志。完成应用 shutdown 与日志清理后，以当前解释器、绝对 main 路径和原命令行参数重新执行进程，配置模块及各运行服务完整重新加载。
+
+状态接口每次启动使用新的 instance_id，网页不会把旧进程仍可返回的健康状态当作重启完成。仅公开系统就绪信息允许跨端口读取，设置、密钥和重启操作不开放跨来源写入。外部 ASGI 应用未注入生命周期控制器时，重启 API 返回明确的不可用提示。
+
+`tests/test_restart.py` 在临时目录启动真实 main 进程，验收配置重载、端口变更、命令行保留、内存清空和退出；网页测试独立验收确认操作及等待新实例的交互。
+
 ## 文档开发
 
 文档使用 [VitePress 1.6](https://vuejs.github.io/vitepress/v1/guide/getting-started)，需要 Node.js 22+。`package.json`、锁文件和依赖安装均位于 `docs/` 中：
