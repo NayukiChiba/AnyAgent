@@ -17,7 +17,7 @@ uv run ruff format --check .
 
 包根 anyagent 仅保留 __init__.py。当前 main.py 通过 anyagent.runtime.bootstrap.create_app 装配应用，api/app.py 构造 FastAPI，api/routes/health.py 提供健康检查，utils/logger.py 管理日志。
 
-当前 core/domain、core/ports 和 core/services 已实现会话闭环；adapters/runners/langchain 实现真实 SDK，infrastructure/memory 提供会话仓储。后续 pipeline、Provider、MCP、检索和持久仓储随用例扩展。core 只依赖领域与端口，不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
+当前 core/domain、core/ports 和 core/services 已实现会话闭环；adapters/runners/langchain 实现真实 SDK，infrastructure/sqlite 通过 SQLAlchemy 与 aiosqlite 提供会话仓储，infrastructure/memory 用于隔离连接测试和单元测试。后续 pipeline、Provider、MCP 和检索随用例扩展。core 只依赖领域与端口，不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
 
 配置代码位于 anyagent/configs，JSON 位于根目录 data/configs。BaseSettings 只统一配置值校验，不作为领域、Port 或 Service 的公共父类；core 使用 runtime 注入的必要配置值。
 
@@ -32,6 +32,14 @@ uv run ruff format --check .
 责任链描述执行顺序，洋葱分层描述代码依赖，两者分别验收。Protocol 不保证 SDK 的运行语义，公共契约测试与真实执行负责验证；Python 类型机制见[官方文档](https://docs.python.org/3/library/typing.html#typing.Protocol)。当前 Runner、Factory、SessionRepository 采用 Protocol，ChatService 注入这些端口；完整阶段 pipeline 尚未实现。
 
 utils 不存放业务策略。包入口不创建数据库、Manager 或网络任务；configs 的共享 JSON 初始化是现有配置约定的例外。尚未进入实施阶段的目录不提前建空壳，新增 Runner 不修改通用 pipeline 或专门新增厂商路由。
+
+## SQLite 仓储
+
+`SQLiteSessionRepository` 实现既有 SessionRepository 端口，core 不导入 ORM。runtime 在 lifespan 中连接、创建缺失表，服务 shutdown 完成后关闭引擎；初始化失败同样关闭引擎，不回退到空库。每次仓储操作创建独立 AsyncSession，事务不跨越模型调用。
+
+当前表以单行 JSON 列保存完整的有序消息快照，与标题一起原子提交；历史仍受 max_history_messages 窗口限制。写事务先取得 SQLite 写锁，再检查会话容量或更新记录，数据库错误转换为不含 SQL 参数的 storage_unavailable。运行状态与并发保护仍属于单进程内存，数据库文件不代表执行断点恢复或多进程业务协调。
+
+首次版本使用 create_all 创建缺失表；后续已有表结构变更必须设计并验收迁移，create_all 不会升级已有列。tests/test_sqlite_sessions.py 覆盖重新连接、跨应用实例恢复、删除、并发容量、事务回滚、取消和损坏数据库保护。运行测试使用临时数据目录，避免写入开发者会话。
 
 ## Vue 3 前端开发
 
@@ -64,7 +72,7 @@ npm run test:e2e
 
 状态接口每次启动使用新的 instance_id，网页不会把旧进程仍可返回的健康状态当作重启完成。仅公开系统就绪信息允许跨端口读取，设置、密钥和重启操作不开放跨来源写入。外部 ASGI 应用未注入生命周期控制器时，重启 API 返回明确的不可用提示。
 
-`tests/test_restart.py` 在临时目录启动真实 main 进程，验收配置重载、端口变更、命令行保留、内存清空和退出；网页测试独立验收确认操作及等待新实例的交互。
+`tests/test_restart.py` 在临时目录启动真实 main 进程，验收配置重载、端口变更、命令行保留、会话保留和退出；网页测试独立验收确认操作及等待新实例的交互。
 
 ## 文档开发
 

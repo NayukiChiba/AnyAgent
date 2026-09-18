@@ -64,3 +64,18 @@ class LoggingSettings(BaseSettings):
 class CmdConfig(BaseSettings):
     paths: PathSettings
     server: ServerSettings
+
+
+class DatabaseSettings(BaseSettings):
+    file_path: Path = default.DEFAULT_DATABASE_CONFIG["file_path"]
+    busy_timeout_seconds: int = Field(
+        default=default.DEFAULT_DATABASE_CONFIG["busy_timeout_seconds"],
+        ge=1,
+        le=60,
+        strict=True,
+    )
+
+    @field_validator("file_path")
+    @classmethod
+    def resolve_file_path(cls, value: Path) -> Path:
+        return paths.get_database_path(value)

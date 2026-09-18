@@ -94,7 +94,7 @@ def test_real_sdk_tool_loop_http_sse_websocket_and_hot_reload(
         assert client.post(f"{url}/messages", json={"content": " "}).status_code == 422
         assert client.delete(url).status_code == 204
         assert client.get(url).status_code == 404
-        assert client.get("/api/v1/agent").json()["storage"] == "memory"
+        assert client.get("/api/v1/agent").json()["storage"] == "sqlite"
     with TestClient(app) as client:
         assert client.get("/api/v1/sessions").json() == []
     assert not list(paths.get_data_dir().rglob("*.sqlite*"))

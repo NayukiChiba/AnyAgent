@@ -14,9 +14,11 @@ from urllib.request import Request, urlopen
 import pytest
 from fastapi.testclient import TestClient
 
-from anyagent.configs import paths
 from anyagent.runtime.bootstrap import create_app
 from anyagent.runtime.restart import RestartController
+from tests.model_fixture import open_model_endpoint
+
+pytestmark = pytest.mark.usefixtures("runtime_paths")
 
 
 def test_restart_api_requires_explicit_lifecycle_and_same_origin():
@@ -77,14 +79,22 @@ def wait_instance(process, port, previous=None):
     raise AssertionError("Replacement server did not become ready")
 
 
+@pytest.fixture
+def model_endpoint():
+    with open_model_endpoint() as endpoint:
+        yield endpoint
+
+
 @pytest.mark.parametrize("override", [False, True])
-def test_main_replaces_process_reloads_settings_and_preserves_cli(tmp_path, override):
+def test_main_replaces_process_reloads_settings_and_preserves_cli(
+    tmp_path, override, runtime_paths, model_endpoint
+):
     shutil.copytree(
-        paths.get_project_root() / "anyagent",
+        runtime_paths / "anyagent",
         tmp_path / "anyagent",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
-    shutil.copy(paths.get_main_path(), tmp_path / "main.py")
+    shutil.copy(runtime_paths / "main.py", tmp_path / "main.py")
     config_dir = tmp_path / "data/configs"
     config_dir.mkdir(parents=True)
     port, next_port = free_port(), free_port()
@@ -93,6 +103,16 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(tmp_path, over
             {
                 "paths": {"data_dir": "data"},
                 "server": {"host": "127.0.0.1", "port": port},
+            }
+        )
+    )
+    (config_dir / "model_config.json").write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "base_url": model_endpoint[0],
+                "model": "fixture-model",
+                "api_key": "fixture-secret",
             }
         )
     )
@@ -105,7 +125,16 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(tmp_path, over
         )
         try:
             initial = wait_instance(process, port)
-            http(port, "/api/v1/sessions", method="POST")
+            saved_session = http(port, "/api/v1/sessions", method="POST")
+            session_url = f"/api/v1/sessions/{saved_session['id']}"
+            result = http(
+                port,
+                f"{session_url}/messages",
+                method="POST",
+                payload={"content": "2+3"},
+            )
+            assert result["content"] == "结果是 5"
+            saved_history = http(port, session_url)
             groups = http(port, "/api/v1/settings")["groups"]
             agent = next(
                 group for group in groups if group["name"] == "langchain_config"
@@ -134,7 +163,10 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(tmp_path, over
             assert response["port"] == effective_port
             replaced = wait_instance(process, effective_port, initial["instance_id"])
             assert replaced["restart_available"] and not replaced["restarting"]
-            assert http(effective_port, "/api/v1/sessions") == []
+            assert (
+                http(effective_port, "/api/v1/sessions")[0]["id"] == saved_session["id"]
+            )
+            assert http(effective_port, session_url) == saved_history
             assert (
                 http(effective_port, "/api/v1/agent")["limits"]["max_input_chars"] == 3
             )

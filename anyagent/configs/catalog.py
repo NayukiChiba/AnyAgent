@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from anyagent.configs.agent import FrontendSettings, LangChainSettings, ModelSettings
 from anyagent.configs.base import BaseSettings
 from anyagent.configs.default import DEFAULT_CONFIGS
-from anyagent.configs.models import CmdConfig, LoggingSettings
+from anyagent.configs.models import CmdConfig, DatabaseSettings, LoggingSettings
 
 
 @dataclass(frozen=True)
@@ -137,6 +137,24 @@ GROUPS = {
             "cancel_timeout_ms": (
                 "停止确认等待时间（毫秒）",
                 "WebSocket 停止生成后等待服务确认的时间。",
+                True,
+            ),
+        },
+    ),
+    "database_config": ConfigGroup(
+        "会话存储",
+        "会话和已完成的聊天记录保存在本机 SQLite 数据库，重启后继续使用。",
+        DatabaseSettings,
+        "restart",
+        {
+            "file_path": (
+                "数据库文件位置",
+                "通常保留默认值。更换文件会打开另一份数据库，不会自动搬迁已有会话。文件须位于 data 内，使用 .db、.sqlite 或 .sqlite3 扩展名。",
+                True,
+            ),
+            "busy_timeout_seconds": (
+                "数据库锁等待时间（秒）",
+                "其他写入占用数据库时等待的时间。通常保持默认值。",
                 True,
             ),
         },

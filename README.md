@@ -1,6 +1,6 @@
 # AnyAgent
 
-基于 FastAPI 的多 Agent Runner 应用平台。当前已实现首个 LangChain Agent：OpenAI 兼容模型、多轮对话、计算工具和统一 HTTP/WebSocket 流式事件。会话保存在单进程内存中，服务重启后清空，暂不接入 SQLite。
+基于 FastAPI 的多 Agent Runner 应用平台。当前已实现首个 LangChain Agent：OpenAI 兼容模型、多轮对话、计算工具和统一 HTTP/WebSocket 流式事件。会话通过 SQLAlchemy 与 aiosqlite 保存到本机 SQLite 数据库，服务重启后继续使用。
 
 ## 启动
 
@@ -27,7 +27,7 @@ uv run main.py
 2. 开启“启用模型”，选择流式或非流式输出，点击“保存设置”。
 3. 点击“测试已保存的连接”，成功后返回聊天。测试会调用模型确认连接，不写入聊天历史。
 
-无需编辑配置文件。设置页面还可调整 Agent 行为、网页偏好、日志和服务参数；高级项默认收起，各组注明生效时间。输入错误不覆盖原配置，离开未保存的表单会提醒，多个页面同时编辑时会检测保存冲突。保存密钥后网页不回显，留空保留原密钥，清除需单独选择。
+无需编辑配置文件。设置页面还可调整 Agent 行为、网页偏好、会话存储、日志和服务参数；高级项默认收起，各组注明生效时间。输入错误不覆盖原配置，离开未保存的表单会提醒，多个页面同时编辑时会检测保存冲突。保存密钥后网页不回显，留空保留原密钥，清除需单独选择。
 
 实际设置仍保存在 `data/configs/` 分类 JSON 中。需要手动部署时，可编辑 `model_config.json`：
 
@@ -53,15 +53,23 @@ uv run main.py
 
 LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时限单独保存在 `data/configs/langchain_config.json`，该配置在启动时读取，修改后重启生效。初始工具 `calculate` 支持加减乘除，不执行任意代码。
 
+## 会话持久化
+
+首次启动自动创建 `data/configs/database_config.json` 和 `data/anyagent.db`。网页“设置 → 会话存储”可调整数据库位置和锁等待时限；保留默认值即可。数据库位置必须位于 `data/` 内，修改位置并重启会打开另一个数据库，不会自动搬迁旧记录。
+
+成功轮次使用事务保存标题和有序消息；失败、超时和取消不提交半轮记录。沿用 `max_history_messages` 的历史窗口（默认最近 40 条消息），这不是无限历史归档。删除会话会同步删除其保存的记录。
+
+迁移时先停止服务，再完整复制 `data/`，包括存在的 SQLite 辅助文件；数据库损坏或不可读会使启动报错，不自动清空。此前仅在内存中的会话没有可读取的存档。
+
 ## Vue 3 Agent 工作台
 
-页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认连接从 `data/configs/frontend_config.json` 的 `default_transport` 读取（`websocket` 或 `http`），也可在页面切换。该文件中的 `cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。页面显示模型的“流式输出”或“非流式输出”模式；设置中保存模型后返回聊天，即读取最新状态。手动修改 JSON 后也可点击“刷新配置”；已保存密钥不返回浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
+页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认连接从 `data/configs/frontend_config.json` 的 `default_transport` 读取（`websocket` 或 `http`），也可在页面切换。该文件中的 `cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。页面显示模型的“流式输出”或“非流式输出”模式；设置中保存模型后返回聊天，即读取最新状态。手动修改 JSON 后也可点击“刷新配置”；已保存密钥不返回浏览器。刷新页面或重启服务后可恢复已保存的会话与历史窗口。
 
 前端依赖与源码独立放在 `frontend/`。开发时启动后端，再在 frontend 运行 `npm run dev`，Vite 将 `/api` 和 `/ws` 转发到本地 `8000` 端口；监听其他端口时修改 frontend 的 Vite proxy。
 
 ## 网页重启
 
-通过 `main.py` 启动后，设置页面下方提供“重启服务”。先保存或撤销草稿，再确认重启；服务清理连接与日志后重新执行入口，读取最新配置，内存聊天记录清空。网页等待新的服务就绪后重新打开设置，修改端口时跳转到新端口。重启前会检查新监听地址和端口，准备失败时保留当前服务。
+通过 `main.py` 启动后，设置页面下方提供“重启服务”。先保存或撤销草稿，再确认重启；服务清理连接与日志后重新执行入口，读取最新配置，已保存的会话保留，进行中的对话中止。网页等待新的服务就绪后重新打开设置，修改端口时跳转到新端口。重启前会检查新监听地址和端口，准备失败时保留当前服务。
 
 命令行 `--host`、`--port` 在重启后继续覆盖配置。`frontend_config.json` 的 `restart_poll_interval_ms`、`restart_wait_timeout_seconds` 控制网页检查间隔和等待时限，可在“网页偏好”的高级设置调整。外部 ASGI 启动不提供进程重启能力。
 
@@ -69,7 +77,7 @@ LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /api/v1/settings` | 五组设置及表单信息，密钥隐藏 |
+| `GET /api/v1/settings` | 六组设置及表单信息，密钥隐藏 |
 | `PUT /api/v1/settings/{name}` | 校验并保存一组配置，需携带载入时的 revision |
 | `POST /api/v1/settings/model_config/test` | 测试已保存模型的实际连接 |
 | `GET /api/v1/system` | 当前启动标识、就绪状态和重启能力 |
@@ -101,6 +109,8 @@ WebSocket 发送 `{"type":"message","content":"请使用工具计算 2+3"}`，�
 - `data/configs/model_config.json`：模型连接与密钥，新执行热重载。
 - `data/configs/langchain_config.json`：Agent prompt、步骤、历史、并发、输入/输出/事件大小和清理时限，修改后重启。
 - `data/configs/frontend_config.json`：前端默认连接和取消确认等待时间；刷新配置读取，默认连接在重新加载页面时采用。
+- `data/configs/database_config.json`：SQLite 文件路径与锁等待时限，修改后重启。
+- `data/anyagent.db`：会话标题、创建时间及已完成的历史窗口。
 - `data/logs/anyagent.log`：应用和服务器日志。
 
 缺失配置独立创建默认值；已有有效 JSON 自动补齐新增默认项，保留显式值与密钥，完整配置不重复写入；格式、字段或路径无效时，原文件备份为 `data/configs/<文件名>.<时间戳>.bak`，仅恢复该类型。权限错误直接报告。旧 `data/config.json` 自动拆分迁移，已有新文件优先。
@@ -113,7 +123,8 @@ anyagent/
 │   ├── ports/       # Runner、Factory 和会话仓储 Protocol
 │   └── services/    # 会话执行、提交、预算与清理
 ├── adapters/runners/langchain/ # 官方 SDK 和工具适配
-├── infrastructure/memory/    # 可替换的内存仓储
+├── infrastructure/sqlite/    # SQLAlchemy 异步会话仓储
+├── infrastructure/memory/    # 隔离连接测试与单元测试仓储
 ├── api/             # HTTP、SSE、WebSocket、静态页面与错误转换
 ├── runtime/         # 配置注入、依赖装配和生命周期
 └── utils/           # 日志等技术支撑
@@ -121,7 +132,7 @@ anyagent/
 
 核心层不依赖 SDK、Web 框架、数据库或全局配置。新增 Runner 实现端口并由 runtime 装配，不在通用聊天 API 中添加厂商分支。实际路径只在 `anyagent/configs/paths.py` 定义。包根仅保留版本与包标识，Python 代码只使用绝对导入。
 
-LangGraph、Pi、Coze、Dify、DeerFlow，以及公共 MCP、RAG 和 pipeline 是后续开发目标，当前未实现。本轮先交付 LangChain 与 Vue 3 最小闭环，后续再替换内存仓储接入 SQLite；当前不承诺生产鉴权、持久执行或多进程部署。`plans/` 是本地计划目录，不提交。
+LangGraph、Pi、Coze、Dify、DeerFlow，以及公共 MCP、RAG 和 pipeline 是后续开发目标，当前未实现。已交付 LangChain、Vue 3 与 SQLite 会话持久化；当前不承诺生产鉴权、持久执行或多进程部署。`plans/` 是本地计划目录，不提交。
 
 ## 开发验证与文档
 

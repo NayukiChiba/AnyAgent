@@ -15,13 +15,13 @@ features:
   - title: 统一入口
     details: 通过 main.py 启动 FastAPI 和 Vue 3 聊天工作台，支持 HTTP 与 WebSocket。
   - title: 数据集中
-    details: 当前配置与日志保存在根目录 data/，便于管理和迁移。
+    details: 当前配置、会话数据库与日志保存在根目录 data/，便于管理和迁移。
   - title: Runner 解耦
-    details: 首个 LangChain SDK 通过 Runner 端口接入，工具循环与内存会话形成最小闭环。
+    details: 首个 LangChain SDK 通过 Runner 端口接入，工具循环与持久会话形成最小闭环。
 ---
 
 ## 当前状态
 
-已实现 LangChain Agent、多轮对话、计算工具、模型配置热重载和 Vue 3 工作台，会话暂存内存。
+已实现 LangChain Agent、多轮对话、计算工具、模型配置热重载和 Vue 3 工作台，会话保存于本机 SQLite，重启后继续使用。
 
-LangGraph、Pi、Coze、Dify、DeerFlow、公共 MCP/RAG、完整 pipeline 与 SQLite 持久化仍在后续开发范围内。
+LangGraph、Pi、Coze、Dify、DeerFlow、公共 MCP/RAG、完整 pipeline 仍在后续开发范围内。

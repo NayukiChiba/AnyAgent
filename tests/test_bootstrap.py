@@ -1,7 +1,11 @@
 import asyncio
 
+import pytest
+
 from anyagent.configs import config
 from anyagent.runtime.bootstrap import create_app
+
+pytestmark = pytest.mark.usefixtures("runtime_paths")
 
 
 def test_application_consumes_shared_config():

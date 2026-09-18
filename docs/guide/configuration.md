@@ -10,6 +10,7 @@
 | `logging_config.json` | 日志级别、文件路径、轮转参数 | `logging_config` |
 | `model_config.json` | OpenAI 兼容模型连接与密钥 | `load_model_config()`，新执行热重载 |
 | `langchain_config.json` | Agent prompt、历史与执行预算 | `load_langchain_config()`，启动时读取 |
+| `database_config.json` | SQLite 文件位置、数据库锁等待时限 | `load_database_config()`，启动时读取 |
 | `frontend_config.json` | 默认连接、取消确认与重启检查等待参数 | `load_frontend_config()`，状态刷新时读取 |
 
 配置代码位于 `anyagent/configs/`，属于应用的外层支撑模块。`base.py` 定义共享校验规则，`models.py` 定义基础配置模型，`agent.py` 定义模型连接与 LangChain 配置，`default.py` 定义默认值并创建 JSON，`paths.py` 集中处理路径，`load.py` 加载、校验和恢复分类 JSON，`catalog.py` 登记网页分组和字段信息，`management.py` 提供密钥隐藏、校验保存和版本冲突检查，`__init__.py` 导出共享对象。实际 JSON 和日志始终保存在项目根目录 data，不随代码迁入应用包。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
@@ -21,7 +22,7 @@ host = cmd_config.server.host
 log_file = logging_config.file_path
 ```
 
-主配置与日志配置在模块导入时加载，修改后重启。LangChain 配置在启动时读取；模型连接配置每次新执行重新加载，无需重启，正在执行的请求使用自己的快照。共享配置对象不可直接修改。配置示例见 [LangChain Agent](./agent.md)。
+主配置与日志配置在模块导入时加载，修改后重启。LangChain 与数据库配置在启动时读取；模型连接配置每次新执行重新加载，无需重启，正在执行的请求使用自己的快照。共享配置对象不可直接修改。配置示例见 [LangChain Agent](./agent.md)。
 
 配置模型统一继承项目自己的 `BaseSettings`，基于 Pydantic BaseModel，拒绝未知字段、禁止字段重新赋值并校验默认值。它只处理配置值，不自动读取环境变量、dotenv 或文件；分类 JSON 的加载与恢复由 loader 完成。`frozen` 不递归冻结 list/dict，未来含集合的运行快照需要显式隔离。Pydantic 的配置继承机制见[官方文档](https://docs.pydantic.dev/latest/concepts/config/#change-behaviour-globally)。
 
@@ -60,7 +61,24 @@ config_file = paths.get_config_path("cmd_config")
 logs_dir = paths.get_logs_dir()
 ```
 
-`get_project_root()`、`get_data_dir()`、`get_configs_dir()` 和 `get_logs_dir()` 返回固定部署目录；`get_log_path()` 获取默认日志文件，也可传入配置路径进行校验。当前使用的配置数据目录和日志文件分别以 `config.paths.data_dir` 和 `logging_config.file_path` 为准。旧配置和备份路径也由 paths 模块提供，其他代码不硬编码或自行拼接运行路径。路径函数只计算和校验，不创建目录或文件。
+`get_project_root()`、`get_data_dir()`、`get_configs_dir()` 和 `get_logs_dir()` 返回固定部署目录；`get_database_path()` 获取并校验 SQLite 文件路径；`get_log_path()` 获取默认日志文件，也可传入配置路径进行校验。当前使用的配置数据目录和日志文件分别以 `config.paths.data_dir` 和 `logging_config.file_path` 为准。旧配置和备份路径也由 paths 模块提供，其他代码不硬编码或自行拼接运行路径。路径函数只计算和校验，不创建目录或文件。
+
+## 会话数据库
+
+`data/configs/database_config.json`：
+
+```json
+{
+  "file_path": "data/anyagent.db",
+  "busy_timeout_seconds": 5
+}
+```
+
+`DatabaseSettings` 校验 SQLite 文件路径必须位于 `data/` 内，扩展名为 `.db`、`.sqlite` 或 `.sqlite3`；锁等待时限为 1–60 秒。网页“会话存储”可修改这些值，保存后重启生效。更换路径会打开另一数据库，不搬迁旧会话。
+
+数据库由 runtime 在启动时连接，使用 SQLAlchemy 异步仓储保存会话与已完成的历史窗口；连接测试仍使用隔离内存仓储。退出时完成执行清理并关闭连接池。损坏数据库不会触发 JSON 配置的备份恢复逻辑，也不会被覆盖为空库。
+
+迁移或备份时先停止服务，再完整复制 `data/`，包括存在的 SQLite 辅助文件。旧版本的内存会话没有持久存档可以迁移。
 
 ## 独立扩展配置
 

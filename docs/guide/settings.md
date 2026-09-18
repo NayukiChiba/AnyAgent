@@ -18,16 +18,19 @@
 | 模型连接 | 启用状态、地址、模型、密钥、流式开关、模型请求参数 | 下一次聊天，无需重启；当前生成继续使用原快照 |
 | Agent 行为 | 助手指令、历史、会话数、并发、执行与输出限制 | 保存后重启服务 |
 | 网页偏好 | 默认连接方式、停止确认等待时间 | 保存后重新打开聊天页面 |
+| 会话存储 | SQLite 文件位置、数据库锁等待时限 | 保存后重启服务 |
 | 日志 | 级别、文件位置、轮转大小与保留数量 | 保存后重启服务 |
 | 服务 | 监听地址、端口和数据目录 | 保存后重启服务 |
 
 高级设置默认收起，首次使用通常保留默认值。每个字段都有用途说明，数值项提示允许范围。重启项修改后显示“待重启”；保存后点击页面下方的“重启服务”，确认即可应用。也可用 `Ctrl+C` 停止服务，再运行 `uv run main.py`。修改端口后，通过新端口打开网页；命令行 `--host`、`--port` 仍会覆盖本次启动参数。
 
-设置保存到本机根目录 `data/configs/`，重新打开网页不会丢失；聊天历史仍保存在内存中，重启服务后清空。
+设置保存到本机根目录 `data/configs/`，重新打开网页不会丢失；会话与已完成的历史窗口保存在本机 SQLite 中，重启服务后继续使用。
+
+“会话存储”默认使用 `data/anyagent.db`，通常无需修改。更换文件位置并重启会打开另一个数据库，不会自动迁移原会话。
 
 ## 网页重启
 
-使用 `main.py` 启动后，设置页面下方可点击“重启服务”。有未保存的修改时按钮不可用，先保存或撤销；确认框会提醒内存会话清空和对话停止。服务清理连接及日志后重新执行入口，网页等待新的服务就绪，再重新打开设置。
+使用 `main.py` 启动后，设置页面下方可点击“重启服务”。有未保存的修改时按钮不可用，先保存或撤销；确认框会提醒已保存会话保留和进行中的对话停止。服务清理连接及日志后重新执行入口，网页等待新的服务就绪，再重新打开设置。
 
 如果改了监听端口，重启后跳转到新端口。命令行 `--host`、`--port` 保留本次覆盖。重启前检查新的监听地址和端口是否可用，准备失败时原服务继续运行。检查和实际重新监听之间仍可能遇到环境变化；等待失败时提供重新打开的地址和运行窗口提示，不自动再发起重启。
 
@@ -43,11 +46,11 @@
 
 ## 实现约定
 
-参考 AstrBot 的[配置服务](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/dashboard/services/config_service.py)与[配置页面](https://github.com/AstrBotDevs/AstrBot/blob/master/dashboard/src/views/ConfigPage.vue)，将配置值、表单元数据和保存校验分开处理。AnyAgent 使用自己的配置 schema 与五组设置，不引入 AstrBot 的插件及配置档案管理体系。
+参考 AstrBot 的[配置服务](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/dashboard/services/config_service.py)与[配置页面](https://github.com/AstrBotDevs/AstrBot/blob/master/dashboard/src/views/ConfigPage.vue)，将配置值、表单元数据和保存校验分开处理。AnyAgent 使用自己的配置 schema 与六组设置，不引入 AstrBot 的插件及配置档案管理体系。
 
 字段名称和帮助信息登记在 `anyagent/configs/catalog.py`，控件类型、选项和范围从配置 schema 生成。`management.py` 隐藏密钥并校验、保存；runtime 装配管理器和连接测试，core 继续通过注入值与端口工作。
 
-- `GET /api/v1/settings` 返回五组设置、默认值、字段信息和 `revision`，密钥值为空。
+- `GET /api/v1/settings` 返回六组设置、默认值、字段信息和 `revision`，密钥值为空。
 - `PUT /api/v1/settings/{name}` 接收 `values`、载入时的 `revision` 和可选 `clear_api_key`，只保存登记的分类。
 - `POST /api/v1/settings/model_config/test` 使用已保存配置测试真实 Runner，通过隔离内存会话执行，不污染聊天历史。
 

@@ -111,6 +111,11 @@ class ConfigurationManager:
                 elif path in {"paths.data_dir", "file_path"}:
                     fields[path] = (
                         f"{label}必须位于指定的数据目录内，且目录不能当作文件、文件不能当作目录"
+                        + (
+                            "；数据库须使用 .db、.sqlite 或 .sqlite3 扩展名"
+                            if name == "database_config"
+                            else ""
+                        )
                     )
                 elif path == "base_url":
                     fields[path] = (
@@ -132,7 +137,7 @@ class ConfigurationManager:
             stored["paths"]["data_dir"] = paths.as_project_relative(
                 validated.paths.data_dir
             )
-        elif name == "logging_config":
+        elif name in {"logging_config", "database_config"}:
             stored["file_path"] = paths.as_project_relative(validated.file_path)
         if name == "model_config" and stored["base_url"].endswith("/chat/completions"):
             raise SettingsError(

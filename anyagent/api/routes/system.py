@@ -47,7 +47,7 @@ async def restart(request: Request, background: BackgroundTasks) -> dict:
         ) from None
     background.add_task(controller.stop_server)
     return {
-        "message": "正在重启服务，内存会话将清空",
+        "message": "正在重启服务，已保存的会话会保留",
         "instance_id": controller.instance_id,
         "port": port,
     }

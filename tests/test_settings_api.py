@@ -97,6 +97,9 @@ def test_secret_retention_clear_and_model_hot_reload(settings_client):
         ("cmd_config", {"server": {"host": "http://oops"}}, "server.host"),
         ("cmd_config", {"paths": {"data_dir": "../escape"}}, "paths.data_dir"),
         ("logging_config", {"file_path": "data/outside.log"}, "file_path"),
+        ("database_config", {"file_path": "../escape.db"}, "file_path"),
+        ("database_config", {"file_path": "data/configs/other.json"}, "file_path"),
+        ("database_config", {"busy_timeout_seconds": 0}, "busy_timeout_seconds"),
         (
             "model_config",
             {"base_url": "https://example.com/v1/chat/completions"},

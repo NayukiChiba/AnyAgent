@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from anyagent.configs import default, paths
 from anyagent.configs.agent import FrontendSettings, LangChainSettings, ModelSettings
-from anyagent.configs.models import CmdConfig, LoggingSettings
+from anyagent.configs.models import CmdConfig, DatabaseSettings, LoggingSettings
 
 logger = logging.getLogger(__name__)
 Model = TypeVar("Model", bound=BaseModel)
@@ -92,6 +92,12 @@ def load_cmd_config() -> CmdConfig:
 def load_logging_config() -> LoggingSettings:
     return load_config(
         "logging_config", LoggingSettings, default.DEFAULT_LOGGING_CONFIG
+    )
+
+
+def load_database_config() -> DatabaseSettings:
+    return load_config(
+        "database_config", DatabaseSettings, default.DEFAULT_DATABASE_CONFIG
     )
 
 

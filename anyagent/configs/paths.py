@@ -72,6 +72,17 @@ def resolve_data_directory(value: str | Path) -> Path:
     return path
 
 
+def get_database_path(value: str | Path | None = None) -> Path:
+    """Resolve a SQLite filename inside data, without creating resources."""
+    path = resolve_data_path(get_data_dir() / "anyagent.db" if value is None else value)
+    if path.suffix.lower() not in {".db", ".sqlite", ".sqlite3"}:
+        raise ValueError("Database files must use a SQLite file extension")
+    if path.exists() and not path.is_file():
+        raise ValueError("Database files cannot refer to directories")
+    resolve_data_directory(path.parent)
+    return path
+
+
 def get_configs_dir() -> Path:
     """Return the configuration directory, rejecting symlinks outside data."""
     return resolve_data_path(CONFIGS_DIR)

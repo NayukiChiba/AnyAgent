@@ -15,9 +15,14 @@ DEFAULT_LOGGING_CONFIG = {
     "max_bytes": 10485760,
     "backup_count": 5,
 }
+DEFAULT_DATABASE_CONFIG = {
+    "file_path": paths.as_project_relative(paths.get_database_path()),
+    "busy_timeout_seconds": 5,
+}
 DEFAULT_CONFIGS = {
     "cmd_config": DEFAULT_CMD_CONFIG,
     "logging_config": DEFAULT_LOGGING_CONFIG,
+    "database_config": DEFAULT_DATABASE_CONFIG,
 }
 
 DEFAULT_MODEL_CONFIG = {

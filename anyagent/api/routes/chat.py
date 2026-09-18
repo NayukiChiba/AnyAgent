@@ -41,6 +41,7 @@ def http_error(error: ChatError) -> HTTPException:
         "session_limit": 429,
         "model_not_configured": 503,
         "run_timeout": 504,
+        "storage_unavailable": 503,
     }.get(error.code, 502)
     return HTTPException(status, detail=error_data(error)["data"])
 
@@ -56,15 +57,18 @@ async def agent_status(request: Request) -> dict:
 
 @router.get("/api/v1/sessions", tags=["sessions"])
 async def list_sessions(request: Request) -> list[dict]:
-    return [
-        {
-            "id": session.id,
-            "title": session.title,
-            "created_at": session.created_at,
-            "message_count": len(session.messages),
-        }
-        for session in await service(request).repository.list()
-    ]
+    try:
+        return [
+            {
+                "id": session.id,
+                "title": session.title,
+                "created_at": session.created_at,
+                "message_count": len(session.messages),
+            }
+            for session in await service(request).repository.list()
+        ]
+    except ChatError as error:
+        raise http_error(error) from error
 
 
 @router.post("/api/v1/sessions", status_code=201, tags=["sessions"])
