@@ -1,4 +1,6 @@
 import asyncio
+import copy
+import json
 import logging
 import subprocess
 import sys
@@ -202,3 +204,47 @@ def test_logger_and_core_import_do_not_load_configuration(runtime_paths):
         timeout=10,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_business_payloads_are_logged_fully_with_nested_credentials_redacted(
+    log_settings,
+):
+    payload = {
+        "name": "example",
+        "arguments": {
+            "query": "普通工具参数",
+            "api_key": "secret-model-key",
+            "Authorization": "Bearer secret-header",
+            "nested": [{"password": "secret-password", "value": 42}],
+        },
+        "content": '{"answer":"普通工具结果","access_token":"secret-token"}',
+        "response": "第一行\n第二行",
+        "plain_json": '{"value":42}',
+    }
+    original = copy.deepcopy(payload)
+    LogManager.configure(log_settings)
+    logger.info("Business payload: %s", payload)
+    LogManager.shutdown()
+    content = log_settings.file_path.read_text()
+    assert "普通工具参数" in content and "普通工具结果" in content
+    assert "第一行\\n第二行" in content
+    assert len(content.splitlines()) == 1
+    assert "secret-" not in content
+    assert "[REDACTED]" in content
+    recorded = json.loads(content.split("Business payload: ", 1)[1])
+    assert recorded["arguments"]["nested"][0]["value"] == 42
+    assert json.loads(recorded["content"])["answer"] == "普通工具结果"
+    assert recorded["plain_json"] == original["plain_json"]
+    assert payload == original
+
+
+def test_unserializable_payload_does_not_interrupt_logging(log_settings):
+    payload = {}
+    payload["cycle"] = payload
+    LogManager.configure(log_settings)
+    logger.info("Unsupported payload: %s", payload)
+    logger.info("Execution continues")
+    LogManager.shutdown()
+    content = log_settings.file_path.read_text()
+    assert "[UNSERIALIZABLE PAYLOAD]" in content
+    assert "Execution continues" in content

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
@@ -13,6 +14,59 @@ if TYPE_CHECKING:
 
 
 __all__ = ["AnyAgentLogger", "LogManager", "get_logger", "logger"]
+
+
+_CREDENTIAL_FIELDS = frozenset(
+    {
+        "apikey",
+        "authorization",
+        "proxyauthorization",
+        "password",
+        "passwd",
+        "secret",
+        "clientsecret",
+        "accesstoken",
+        "refreshtoken",
+        "token",
+        "privatekey",
+        "secretkey",
+        "credentials",
+    }
+)
+
+
+def _redact_payload(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            str(key): "[REDACTED]"
+            if str(key).replace("_", "").replace("-", "").casefold()
+            in _CREDENTIAL_FIELDS
+            else _redact_payload(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_redact_payload(item) for item in value]
+    if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
+        try:
+            structured = json.loads(value)
+        except (ValueError, RecursionError):
+            return value
+        if isinstance(structured, (dict, list)):
+            redacted = _redact_payload(structured)
+            if redacted == structured:
+                return value
+            return json.dumps(redacted, ensure_ascii=False)
+    return value
+
+
+def _format_argument(value: object) -> object:
+    if not isinstance(value, (dict, list, tuple)):
+        return value
+    try:
+        return json.dumps(_redact_payload(value), ensure_ascii=False, default=str)
+    except (TypeError, ValueError, RecursionError):
+        # Logging unsupported payloads must not interrupt agent execution.
+        return "[UNSERIALIZABLE PAYLOAD]"
 
 
 class AnyAgentLogger:
@@ -37,7 +91,10 @@ class AnyAgentLogger:
         *,
         exception: bool = False,
     ) -> None:
-        self._backend.log(level, message, *args, exc_info=exception, stacklevel=3)
+        if not self._backend.isEnabledFor(level):
+            return
+        formatted = tuple(_format_argument(value) for value in args)
+        self._backend.log(level, message, *formatted, exc_info=exception, stacklevel=3)
 
     def debug(self, message: str, *args: object) -> None:
         self._emit(logging.DEBUG, message, args)
