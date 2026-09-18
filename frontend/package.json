@@ -16,7 +16,8 @@
     "format:check": "prettier --check src tests *.js index.html package.json .prettierrc.json"
   },
   "dependencies": {
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
