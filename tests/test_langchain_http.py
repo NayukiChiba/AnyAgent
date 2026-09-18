@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from anyagent.configs import paths
+from anyagent.configs.agent import FrontendSettings
 from anyagent.runtime.bootstrap import create_app
 from tests.model_fixture import open_model_endpoint
 
@@ -156,10 +157,12 @@ def test_frontend_preferences_reload_and_input_limit_is_shared(
         paths.get_config_path("frontend_config").write_text(
             json.dumps({"default_transport": "http", "cancel_timeout_ms": 2000})
         )
-        assert client.get("/api/v1/agent").json()["frontend"] == {
-            "default_transport": "http",
-            "cancel_timeout_ms": 2000,
-        }
+        assert (
+            client.get("/api/v1/agent").json()["frontend"]
+            == FrontendSettings(
+                default_transport="http", cancel_timeout_ms=2000
+            ).model_dump()
+        )
         session = client.post("/api/v1/sessions").json()
         url = f"/api/v1/sessions/{session['id']}"
         for endpoint in ["messages", "stream"]:

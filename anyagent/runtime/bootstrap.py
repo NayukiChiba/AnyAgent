@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import aclosing, asynccontextmanager
+from uuid import uuid4
 
 from fastapi import FastAPI
 
@@ -20,6 +21,7 @@ from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import RunnerFactory
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.memory.sessions import MemorySessionRepository
+from anyagent.runtime.restart import RestartController
 from anyagent.utils.logger import logger
 
 
@@ -27,6 +29,7 @@ def create_app(
     *,
     runner_factory: RunnerFactory | None = None,
     agent_settings: LangChainSettings | None = None,
+    restart_controller: RestartController | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -106,6 +109,10 @@ def create_app(
             logger.info("Application shutdown complete")
 
     app = build_app(lifespan=lifespan)
+    app.state.restart_controller = restart_controller
+    app.state.instance_id = (
+        restart_controller.instance_id if restart_controller else uuid4().hex
+    )
     install_frontend(
         app,
         index_file=paths.get_frontend_index_path(),

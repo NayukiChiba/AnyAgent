@@ -10,6 +10,11 @@ LOGS_DIR = DATA_DIR / "logs"
 LEGACY_CONFIG_FILE = DATA_DIR / "config.json"
 
 
+def get_main_path() -> Path:
+    """Return the absolute entrypoint for process replacement."""
+    return get_project_root() / "main.py"
+
+
 def get_frontend_dist_dir() -> Path:
     """Return compiled frontend assets, which are source build artifacts."""
     return get_project_root() / "frontend" / "dist"

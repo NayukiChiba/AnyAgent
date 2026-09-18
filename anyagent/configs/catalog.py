@@ -124,6 +124,16 @@ GROUPS = {
                 "WebSocket 和 HTTP 都支持聊天；修改后重新打开聊天页面。",
                 False,
             ),
+            "restart_poll_interval_ms": (
+                "重启状态检查间隔（毫秒）",
+                "网页等待重启时检查服务状态的间隔。",
+                True,
+            ),
+            "restart_wait_timeout_seconds": (
+                "重启等待上限（秒）",
+                "超过此时间会提示手动重试，不会自动再次重启。",
+                True,
+            ),
             "cancel_timeout_ms": (
                 "停止确认等待时间（毫秒）",
                 "WebSocket 停止生成后等待服务确认的时间。",

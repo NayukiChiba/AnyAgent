@@ -43,7 +43,12 @@ DEFAULT_LANGCHAIN_CONFIG = {
     "max_event_chars": 64000,
     "cleanup_timeout_seconds": 5,
 }
-DEFAULT_FRONTEND_CONFIG = {"default_transport": "websocket", "cancel_timeout_ms": 1500}
+DEFAULT_FRONTEND_CONFIG = {
+    "default_transport": "websocket",
+    "cancel_timeout_ms": 1500,
+    "restart_poll_interval_ms": 1000,
+    "restart_wait_timeout_seconds": 60,
+}
 DEFAULT_CONFIGS.update(
     model_config=DEFAULT_MODEL_CONFIG,
     langchain_config=DEFAULT_LANGCHAIN_CONFIG,

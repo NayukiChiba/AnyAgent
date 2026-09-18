@@ -117,3 +117,16 @@ class FrontendSettings(BaseSettings):
         le=30000,
         strict=True,
     )
+
+    restart_poll_interval_ms: int = Field(
+        default=DEFAULT_FRONTEND_CONFIG["restart_poll_interval_ms"],
+        ge=250,
+        le=10000,
+        strict=True,
+    )
+    restart_wait_timeout_seconds: int = Field(
+        default=DEFAULT_FRONTEND_CONFIG["restart_wait_timeout_seconds"],
+        ge=10,
+        le=600,
+        strict=True,
+    )
