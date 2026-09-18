@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import SettingField from '../components/SettingField.vue'
+import RestartControl from '../components/RestartControl.vue'
 import { request } from '../api.js'
 import '../settings.css'
 
@@ -13,13 +14,14 @@ const clearApiKey = ref(false)
 const loading = ref(true)
 const saving = ref(false)
 const testing = ref(false)
+const restarting = ref(false)
 const notice = ref('')
 const failed = ref(false)
 const errors = ref({})
 const advanced = ref(false)
 const group = computed(() => groups.value.find((item) => item.name === selected.value))
 const dirty = computed(() => JSON.stringify(form.value) !== baseline.value || clearApiKey.value)
-const working = computed(() => saving.value || testing.value)
+const working = computed(() => saving.value || testing.value || restarting.value)
 const basicFields = computed(() => group.value?.fields.filter((field) => !field.advanced) || [])
 const advancedFields = computed(() => group.value?.fields.filter((field) => field.advanced) || [])
 
@@ -262,6 +264,13 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
               }}
             </p>
           </div>
+          <RestartControl
+            v-if="groups.some((item) => item.name === 'frontend_config')"
+            :preferences="groups.find((item) => item.name === 'frontend_config').values"
+            :disabled="saving || testing || dirty"
+            @busy="restarting = $event"
+          />
+          <p v-if="dirty" class="restart-draft-hint">先保存或撤销当前修改，再重启服务。</p>
         </form>
       </div>
     </main>
