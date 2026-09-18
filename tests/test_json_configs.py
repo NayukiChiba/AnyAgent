@@ -228,3 +228,61 @@ def test_invalid_extension_defaults_do_not_create_a_config_file(config_dir):
         load_config("extension_config", ExtensionConfig, {})
 
     assert not config_dir.exists()
+
+
+def test_optional_defaults_are_written_without_overwriting_values(config_dir):
+    class NestedSettings(BaseSettings):
+        enabled: bool = False
+        limit: int = 10
+
+    class ExtensionConfig(BaseSettings):
+        nested: NestedSettings
+        streaming: bool = True
+        api_key: str = ""
+
+    config_dir.mkdir(parents=True)
+    file = config_dir / "extension_config.json"
+    original = {
+        "nested": {"enabled": True},
+        "api_key": "keep-local-secret",
+        "streaming": False,
+    }
+    file.write_text(json.dumps(original))
+    file.chmod(0o600)
+    defaults = {
+        "nested": {"enabled": False, "limit": 10},
+        "api_key": "",
+        "streaming": True,
+    }
+    loaded = load_config("extension_config", ExtensionConfig, defaults)
+    assert loaded.nested.enabled
+    assert not loaded.streaming
+    assert json.loads(file.read_text()) == {
+        **original,
+        "nested": {"enabled": True, "limit": 10},
+    }
+    assert file.stat().st_mode & 0o777 == 0o600
+    assert not list(config_dir.glob("*.bak"))
+    assert not list(config_dir.glob(".*.tmp"))
+    unchanged = file.read_bytes()
+    load_config("extension_config", ExtensionConfig, defaults)
+    assert file.read_bytes() == unchanged
+
+
+def test_default_update_failure_preserves_original_config(config_dir, monkeypatch):
+    class ExtensionConfig(BaseSettings):
+        enabled: bool = False
+
+    config_dir.mkdir(parents=True)
+    file = config_dir / "extension_config.json"
+    file.write_text("{}")
+
+    def deny_replace(*args):
+        raise PermissionError("Cannot replace configuration")
+
+    monkeypatch.setattr(type(file), "replace", deny_replace)
+    with pytest.raises(PermissionError):
+        load_config("extension_config", ExtensionConfig, {"enabled": False})
+    assert file.read_text() == "{}"
+    assert not list(config_dir.glob("*.bak"))
+    assert not list(config_dir.glob(".*.tmp"))

@@ -136,3 +136,14 @@ def get_config_backup_path(path: Path, timestamp: int) -> Path:
             "Configuration backups must stay inside the configuration directory"
         )
     return backup
+
+
+def get_config_update_path(path: Path, timestamp: int) -> Path:
+    """Return a temporary sibling for an atomic configuration update."""
+    directory = get_configs_dir()
+    temporary = directory / f".{path.name}.{timestamp}.tmp"
+    if not temporary.resolve().is_relative_to(directory):
+        raise ValueError(
+            "Configuration updates must stay inside the configuration directory"
+        )
+    return temporary

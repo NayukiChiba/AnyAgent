@@ -2,6 +2,7 @@
 
 import json
 import logging
+import stat
 import time
 from pathlib import Path
 from typing import TypeVar
@@ -14,6 +15,28 @@ from anyagent.configs.models import CmdConfig, LoggingSettings
 
 logger = logging.getLogger(__name__)
 Model = TypeVar("Model", bound=BaseModel)
+
+
+def _fill_defaults(values: dict, defaults: dict) -> dict:
+    merged = dict(values)
+    for key, value in defaults.items():
+        if key not in merged:
+            merged[key] = value
+        elif isinstance(value, dict) and isinstance(merged[key], dict):
+            merged[key] = _fill_defaults(merged[key], value)
+    return merged
+
+
+def _save_update(path: Path, values: dict) -> None:
+    temporary = paths.get_config_update_path(path, time.time_ns())
+    try:
+        with temporary.open("x", encoding="utf-8") as file:
+            json.dump(values, file, ensure_ascii=False, indent=2)
+            file.write("\n")
+        temporary.chmod(stat.S_IMODE(path.stat().st_mode))
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _backup_config(path: Path) -> Path:
@@ -43,13 +66,20 @@ def load_config(name: str, schema: type[Model], defaults: dict) -> Model:
     fallback = schema.model_validate(defaults)
     try:
         with path.open(encoding="utf-8-sig") as file:
-            return schema.model_validate(json.load(file))
+            values = json.load(file)
+        loaded = schema.model_validate(values)
     except FileNotFoundError:
         default.create_default_config(name, defaults)
+        return fallback
     except ValueError:
         _backup_config(path)
         default.create_default_config(name, defaults)
-    return fallback
+        return fallback
+    merged = _fill_defaults(values, defaults)
+    if merged != values:
+        schema.model_validate(merged)
+        _save_update(path, merged)
+    return loaded
 
 
 def load_cmd_config() -> CmdConfig:
