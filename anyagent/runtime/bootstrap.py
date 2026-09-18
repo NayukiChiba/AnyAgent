@@ -5,7 +5,8 @@ from fastapi import FastAPI
 
 from anyagent.adapters.runners.langchain.runner import LangChainRunnerFactory
 from anyagent.api.app import build_app
-from anyagent.configs import config, load_langchain_config, load_model_config
+from anyagent.api.frontend import install_frontend
+from anyagent.configs import config, load_langchain_config, load_model_config, paths
 from anyagent.configs.agent import LangChainSettings
 from anyagent.core.ports.chat import RunnerFactory
 from anyagent.core.services.chat import ChatService
@@ -56,4 +57,10 @@ def create_app(
             await app.state.chat_service.shutdown()
             logger.info("Application shutdown complete")
 
-    return build_app(lifespan=lifespan)
+    app = build_app(lifespan=lifespan)
+    install_frontend(
+        app,
+        index_file=paths.get_frontend_index_path(),
+        assets_dir=paths.get_frontend_assets_dir(),
+    )
+    return app

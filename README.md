@@ -4,14 +4,18 @@
 
 ## 启动
 
-需要 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)：
+需要 Python 3.12+、Node.js 22+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)：
 
 ```bash
 uv sync --locked
+cd frontend
+npm ci
+npm run build
+cd ..
 uv run main.py
 ```
 
-服务默认监听 `127.0.0.1:8000`，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
+前端首次构建后，`main.py` 同时提供 FastAPI 和 Vue 3 聊天页面，无需单独启动前端服务。修改前端源码后重新构建即可；构建产物不提交 Git。服务默认监听 `127.0.0.1:8000`，聊天页面位于 <http://127.0.0.1:8000/>，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
 
 源码通过根目录 `anyagent/` 模块直接运行；uv 只管理依赖，不安装项目本身或生成 `egg-info`。
 
@@ -35,6 +39,12 @@ uv run main.py
 每次新执行重新读取模型 JSON，无需重启；正在运行的请求使用自己的配置快照。API Key 只保存在后端配置中，状态接口不返回密钥。无效配置按现有加载规范先备份再恢复默认值；默认模型禁用，不会自动调用模型服务。
 
 LangChain 的 prompt、步骤、会话数、历史窗口、并发数和执行时限单独保存在 `data/configs/langchain_config.json`，该配置在启动时读取，修改后重启生效。初始工具 `calculate` 支持加减乘除，不执行任意代码。
+
+## Vue 3 Agent 工作台
+
+页面提供会话创建、切换和删除，多轮对话、工具参数与结果展示，以及停止生成。默认使用 WebSocket，也可在页面切换至 HTTP · SSE。模型 JSON 保存后点击“刷新配置”，即可使用新的连接配置；密钥不发送给浏览器。刷新页面可恢复当前服务内的历史，服务重启后历史清空。
+
+前端依赖与源码独立放在 `frontend/`。开发时启动后端，再在 frontend 运行 `npm run dev`，Vite 将 `/api` 和 `/ws` 转发到本地 `8000` 端口；监听其他端口时修改 frontend 的 Vite proxy。
 
 ## Agent 接口
 
@@ -79,14 +89,14 @@ anyagent/
 │   └── services/    # 会话执行、提交、预算与清理
 ├── adapters/runners/langchain/ # 官方 SDK 和工具适配
 ├── infrastructure/memory/    # 可替换的内存仓储
-├── api/             # HTTP、SSE、WebSocket 与错误转换
+├── api/             # HTTP、SSE、WebSocket、静态页面与错误转换
 ├── runtime/         # 配置注入、依赖装配和生命周期
 └── utils/           # 日志等技术支撑
 ```
 
 核心层不依赖 SDK、Web 框架、数据库或全局配置。新增 Runner 实现端口并由 runtime 装配，不在通用聊天 API 中添加厂商分支。实际路径只在 `anyagent/configs/paths.py` 定义。包根仅保留版本与包标识，Python 代码只使用绝对导入。
 
-LangGraph、Pi、Coze、Dify、DeerFlow，以及公共 MCP、RAG 和 pipeline 是后续开发目标，当前未实现。先验证 LangChain 与前端最小闭环，再替换内存仓储接入 SQLite；当前不承诺生产鉴权、持久执行或多进程部署。`plans/` 是本地计划目录，不提交。
+LangGraph、Pi、Coze、Dify、DeerFlow，以及公共 MCP、RAG 和 pipeline 是后续开发目标，当前未实现。本轮先交付 LangChain 与 Vue 3 最小闭环，后续再替换内存仓储接入 SQLite；当前不承诺生产鉴权、持久执行或多进程部署。`plans/` 是本地计划目录，不提交。
 
 ## 开发验证与文档
 
@@ -97,6 +107,17 @@ uv run pytest
 ```
 
 SDK 集成测试使用本地确定性的 OpenAI 兼容协议夹具，验证真实 LangChain 工具循环和连接契约；不需要云端密钥，也不代表已验证某个真实模型服务。
+
+前端验证（先同步 Python 依赖并构建前端）：
+
+```bash
+cd frontend
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+浏览器测试自动启动隔离的本地模型协议服务，不读取你的真实模型密钥。Playwright 浏览器仅用于开发测试。
 
 VitePress 文档依赖位于 `docs/`，需要 Node.js 22+：
 

@@ -10,6 +10,19 @@ LOGS_DIR = DATA_DIR / "logs"
 LEGACY_CONFIG_FILE = DATA_DIR / "config.json"
 
 
+def get_frontend_dist_dir() -> Path:
+    """Return compiled frontend assets, which are source build artifacts."""
+    return get_project_root() / "frontend" / "dist"
+
+
+def get_frontend_index_path() -> Path:
+    return get_frontend_dist_dir() / "index.html"
+
+
+def get_frontend_assets_dir() -> Path:
+    return get_frontend_dist_dir() / "assets"
+
+
 def get_project_root() -> Path:
     """Return the absolute project root, independently of the working directory."""
     return PROJECT_ROOT.resolve()
