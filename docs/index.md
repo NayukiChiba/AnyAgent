@@ -13,15 +13,15 @@ hero:
       link: https://github.com/NayukiChiba/AnyAgent
 features:
   - title: 统一入口
-    details: 通过 main.py 启动服务，提供健康检查和 OpenAPI 文档。
+    details: 通过 main.py 启动 FastAPI 和 Vue 3 聊天工作台，支持 HTTP 与 WebSocket。
   - title: 数据集中
     details: 当前配置与日志保存在根目录 data/，便于管理和迁移。
   - title: Runner 解耦
-    details: 后续通过独立适配器接入不同执行后端，并复用 MCP、RAG 等应用服务。
+    details: 首个 LangChain SDK 通过 Runner 端口接入，工具循环与内存会话形成最小闭环。
 ---
 
 ## 当前状态
 
-项目处于开发初期，已实现服务启动、JSON 配置加载、健康检查和日志管理。
+已实现 LangChain Agent、多轮对话、计算工具、模型配置热重载和 Vue 3 工作台，会话暂存内存。
 
-LangChain、LangGraph、Pi、Coze、Dify、DeerFlow 适配，以及 MCP、RAG 和 Agent 执行接口仍在后续开发范围内，当前版本尚未提供。
+LangGraph、Pi、Coze、Dify、DeerFlow、公共 MCP/RAG、完整 pipeline 与 SQLite 持久化仍在后续开发范围内。

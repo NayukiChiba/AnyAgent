@@ -2,7 +2,7 @@
 
 ## 环境准备
 
-运行服务需要 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Node.js 仅用于开发和构建本站文档。
+运行服务需要 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Node.js 22+ 用于构建 Vue 3 前端与本站文档，运行服务时无需 Node.js 进程。
 
 ## 启动服务
 
@@ -10,12 +10,16 @@
 git clone https://github.com/NayukiChiba/AnyAgent.git
 cd AnyAgent
 uv sync --locked
+cd frontend
+npm ci
+npm run build
+cd ..
 uv run main.py
 ```
 
 首次启动会创建 `data/configs/cmd_config.json`，服务默认监听 `127.0.0.1:8000`，日志写入 `data/logs/anyagent.log`。
 
-访问 <http://127.0.0.1:8000/docs> 查看交互式 API 文档。
+访问 <http://127.0.0.1:8000/> 打开 Agent 工作台，配置模型后开始对话。API 文档位于 <http://127.0.0.1:8000/docs>。初始模型默认禁用，配置步骤见 [LangChain Agent](./agent.md)。前端修改后重新构建，构建输出不提交 Git。
 
 ## 覆盖监听参数
 

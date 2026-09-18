@@ -87,3 +87,12 @@ feat(config): 从 JSON 加载运行配置
 
 - 外层日志统一使用 `anyagent.utils.logger`；core 使用标准库日志接口，不依赖日志文件实现。日志路径和轮转参数来自共享配置，日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
 - 文档使用 VitePress，`package.json`、锁文件和依赖安装均在 `docs/` 内；修改文档需运行 `npm ci` 和 `npm run build`，不提交构建产物或缓存。
+
+## 当前 Agent 迭代约定
+
+- 首个 Runner 使用 LangChain 官方 SDK，实现最小对话与工具循环；通过 core/ports 注入 ChatService，API 共用服务，不按连接方式重复实现业务流程。
+- 前端使用 Vue 3，源码、package.json、锁文件和依赖位于 frontend/；构建输出不提交，构建后的页面由 main.py 启动的 FastAPI 同源提供。
+- 对外仅使用 HTTP 和 WebSocket；SSE 属于 HTTP 流式响应，保留作为 HTTP 流式连接选项。
+- 当前会话与执行状态只保存在单进程内存中，不接入 SQLite；成功验收闭环后，持久化实现替换仓储端口。
+- 模型地址、名称和 API Key 独立保存于 data/configs/model_config.json，新执行读取最新配置，既有执行使用自己的快照。API 不返回模型密钥；LangChain prompt 与执行预算使用独立配置，启动时读取。
+- 当前流式连接断开会取消其执行，失败或取消不提交半轮历史。未来后台 Run、重放和持久恢复需要显式实现与验收，不将当前连接语义描述为这些能力。
