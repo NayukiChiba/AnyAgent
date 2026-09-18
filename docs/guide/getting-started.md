@@ -19,7 +19,7 @@ uv run main.py
 
 首次启动会创建 `data/configs/cmd_config.json`，服务默认监听 `127.0.0.1:8000`，日志写入 `data/logs/anyagent.log`。
 
-访问 <http://127.0.0.1:8000/> 打开 Agent 工作台，配置模型后开始对话。API 文档位于 <http://127.0.0.1:8000/docs>。初始模型默认禁用，配置步骤见 [LangChain Agent](./agent.md)。前端修改后重新构建，构建输出不提交 Git。
+访问 <http://127.0.0.1:8000/> 打开 Agent 工作台，配置模型后开始对话。API 文档位于 <http://127.0.0.1:8000/docs>。初始模型默认禁用，点击工作台的“设置”即可填写模型信息并测试连接，步骤见 [网页设置](./settings.md)。前端修改后重新构建，构建输出不提交 Git。
 
 ## 覆盖监听参数
 

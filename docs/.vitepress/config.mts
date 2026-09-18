@@ -16,6 +16,7 @@ export default defineConfig({
         text: '使用指南',
         items: [
           { text: '快速开始', link: '/guide/getting-started' },
+          { text: '网页设置', link: '/guide/settings' },
           { text: '配置管理', link: '/guide/configuration' },
           { text: 'LangChain Agent', link: '/guide/agent' },
           { text: '日志', link: '/guide/logging' },

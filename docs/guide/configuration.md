@@ -1,5 +1,7 @@
 # 配置管理
 
+日常使用请打开工作台的“设置”，无需手动编辑 JSON；首次连接步骤见 [网页设置](./settings.md)。
+
 运行配置按类型组织在根目录 `data/configs/`，不提交 Git：
 
 | 文件 | 内容 | 导出对象 |
@@ -10,7 +12,7 @@
 | `langchain_config.json` | Agent prompt、历史与执行预算 | `load_langchain_config()`，启动时读取 |
 | `frontend_config.json` | 默认连接、取消确认等待时间 | `load_frontend_config()`，状态刷新时读取 |
 
-配置代码位于 `anyagent/configs/`，属于应用的外层支撑模块。`base.py` 定义共享校验规则，`models.py` 定义基础配置模型，`agent.py` 定义模型连接与 LangChain 配置，`default.py` 定义默认值并创建 JSON，`paths.py` 集中处理路径，`load.py` 加载、校验和恢复分类 JSON，`__init__.py` 导出共享对象。实际 JSON 和日志始终保存在项目根目录 data，不随代码迁入应用包。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
+配置代码位于 `anyagent/configs/`，属于应用的外层支撑模块。`base.py` 定义共享校验规则，`models.py` 定义基础配置模型，`agent.py` 定义模型连接与 LangChain 配置，`default.py` 定义默认值并创建 JSON，`paths.py` 集中处理路径，`load.py` 加载、校验和恢复分类 JSON，`catalog.py` 登记网页分组和字段信息，`management.py` 提供密钥隐藏、校验保存和版本冲突检查，`__init__.py` 导出共享对象。实际 JSON 和日志始终保存在项目根目录 data，不随代码迁入应用包。启动入口、runtime 和需要配置的外层模块直接获取所需配置；核心应用通过注入的运行快照使用配置值：
 
 ```python
 from anyagent.configs import cmd_config, logging_config
@@ -76,6 +78,12 @@ feature_config = load_config("feature_config", FeatureConfig, {"enabled": False}
 ```
 
 该调用仅加载或创建 `data/configs/feature_config.json`。名称使用小写字母、数字及下划线，不包含扩展名或目录。后续 MCP、RAG、Runner 配置采用同样方式按职责分文件；当前不预先创建这些功能的空配置。
+
+## 网页保存与手动加载
+
+网页保存先校验整组设置；无效输入仅返回字段提示，原文件不变。保存需携带载入时的 `revision`，多个页面产生冲突时需重新载入。有效修改通过原子替换写回 JSON，并保留文件权限；密钥留空保留，清除需要显式选择。
+
+下面的备份恢复规则用于 loader 读取缺失或损坏文件，不会用来处理网页表单的错误输入。
 
 ## 缺失与无效配置
 

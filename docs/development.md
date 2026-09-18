@@ -45,6 +45,8 @@ npm run dev
 
 Vite 将 `/api` 和 `/ws` 代理到 `127.0.0.1:8000`。`npm run build` 输出到 `frontend/dist/`，由 FastAPI 同源提供；所有 Python 静态资源路径来自 configs/paths.py。
 
+`App.vue` 仅提供路由出口，聊天与设置分别位于 `src/views/`。`/settings` 使用后端提供的字段元数据和通用 `SettingField` 控件，不在页面维护配置默认值或数值范围。FastAPI 明确为 `/` 与 `/settings` 返回前端入口，未知 API 路径不会被网页路由吞掉。
+
 验证流式解析与真实浏览器操作：
 
 ```bash
