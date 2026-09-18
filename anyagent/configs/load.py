@@ -9,6 +9,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from anyagent.configs import default, paths
+from anyagent.configs.agent import LangChainSettings, ModelSettings
 from anyagent.configs.models import CmdConfig, LoggingSettings
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,17 @@ def load_cmd_config() -> CmdConfig:
 def load_logging_config() -> LoggingSettings:
     return load_config(
         "logging_config", LoggingSettings, default.DEFAULT_LOGGING_CONFIG
+    )
+
+
+def load_model_config() -> ModelSettings:
+    """Read a fresh connection snapshot for each new execution."""
+    return load_config("model_config", ModelSettings, default.DEFAULT_MODEL_CONFIG)
+
+
+def load_langchain_config() -> LangChainSettings:
+    return load_config(
+        "langchain_config", LangChainSettings, default.DEFAULT_LANGCHAIN_CONFIG
     )
 
 

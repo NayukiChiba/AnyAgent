@@ -20,6 +20,26 @@ DEFAULT_CONFIGS = {
     "logging_config": DEFAULT_LOGGING_CONFIG,
 }
 
+DEFAULT_MODEL_CONFIG = {
+    "enabled": False,
+    "base_url": "https://api.openai.com/v1",
+    "model": "",
+    "api_key": "",
+    "temperature": 0.7,
+    "timeout_seconds": 60,
+}
+DEFAULT_LANGCHAIN_CONFIG = {
+    "system_prompt": "You are a helpful assistant. Use the calculate tool for arithmetic.",
+    "max_steps": 12,
+    "max_sessions": 64,
+    "max_history_messages": 40,
+    "max_concurrent_runs": 4,
+    "run_timeout_seconds": 120,
+}
+DEFAULT_CONFIGS.update(
+    model_config=DEFAULT_MODEL_CONFIG, langchain_config=DEFAULT_LANGCHAIN_CONFIG
+)
+
 
 def create_default_config(name: str = "cmd_config", values: dict | None = None) -> Path:
     """Create one default configuration without overwriting an existing file.

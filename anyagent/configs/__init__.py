@@ -1,11 +1,14 @@
 """Shared, independently loaded configurations under data/configs."""
 
 from anyagent.configs import paths
+from anyagent.configs.agent import LangChainSettings, ModelSettings
 from anyagent.configs.base import BaseSettings
 from anyagent.configs.load import (
     load_cmd_config,
     load_config,
+    load_langchain_config,
     load_logging_config,
+    load_model_config,
     migrate_legacy_config,
 )
 from anyagent.configs.models import CmdConfig, LoggingSettings, ServerSettings
@@ -17,6 +20,8 @@ config = cmd_config
 
 __all__ = [
     "BaseSettings",
+    "LangChainSettings",
+    "ModelSettings",
     "CmdConfig",
     "LoggingSettings",
     "ServerSettings",
@@ -25,6 +30,8 @@ __all__ = [
     "load_cmd_config",
     "load_config",
     "load_logging_config",
+    "load_model_config",
+    "load_langchain_config",
     "logging_config",
     "paths",
 ]
