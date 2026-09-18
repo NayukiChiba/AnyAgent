@@ -1,7 +1,6 @@
 """Coordinate bounded sessions and commit only successful conversation turns."""
 
 import asyncio
-import logging
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import replace
@@ -11,8 +10,9 @@ from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
 from anyagent.core.ports.chat import AgentRunner, RunnerFactory, SessionRepository
+from anyagent.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatService:

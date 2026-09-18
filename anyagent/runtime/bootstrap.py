@@ -24,7 +24,9 @@ from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.memory.sessions import MemorySessionRepository
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.runtime.restart import RestartController
-from anyagent.utils.logger import logger
+from anyagent.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_app(

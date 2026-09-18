@@ -1,7 +1,6 @@
 """Load independent runtime JSON configurations and migrate legacy settings."""
 
 import json
-import logging
 import os
 import stat
 import time
@@ -13,8 +12,9 @@ from pydantic import BaseModel
 from anyagent.configs import default, paths
 from anyagent.configs.agent import FrontendSettings, LangChainSettings, ModelSettings
 from anyagent.configs.models import CmdConfig, DatabaseSettings, LoggingSettings
+from anyagent.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 Model = TypeVar("Model", bound=BaseModel)
 
 

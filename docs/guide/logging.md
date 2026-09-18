@@ -1,9 +1,11 @@
 # 日志
 
-独立模块 `anyagent.utils.logger` 为外层模块提供统一日志入口：
+独立模块 `anyagent.utils.logger` 为包括 core 在内的所有项目模块提供自定义 `AnyAgentLogger` 日志入口：
 
 ```python
-from anyagent.utils.logger import logger
+from anyagent.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 logger.info("Task started: %s", task_id)
 
@@ -13,6 +15,10 @@ except Exception:
     logger.exception("Task execution failed")
     raise
 ```
+
+共享入口可使用 `from anyagent.utils.logger import logger`；模块入口使用 `get_logger(__name__)`，名称须属于 `anyagent` 命名空间。接口只提供 debug、info、warning、error、critical、exception 方法及只读名称，不提供原生 Logger 的 Handler 或级别修改能力。业务代码禁止直接导入 logging、调用 logging.getLogger 或自行配置输出。
+
+原生 logging 仅在 utils/logger 内部承接队列、文件输出和第三方兼容。日志模块导入不加载配置、不创建文件或线程；LogManager.configure 显式接收已校验配置，避免配置 loader 与日志相互引用。core 依赖该通用接口是明确的跨层日志例外，不依赖其他 utils 实现。
 
 源码中的日志内容使用英文。异常日志保留堆栈，文件采用 UTF-8 编码，支持中文数据。
 
@@ -38,7 +44,7 @@ INFO 展示项目启动、SQLite 连接、Agent 执行开始/完成/取消和服
 
 DEBUG 补充会话创建/删除、上下文消息数、Runner 创建、工具调用次数与历史提交阶段。选择 DEBUG 不会默认放开依赖日志；需要定位依赖问题时单独调整 third_party_level。数据库驱动、SQLAlchemy 引擎以及 OpenAI/HTTP 客户端低于 WARNING 的日志始终过滤，避免 SQL 参数、请求载荷与密钥进入日志。
 
-参考 AstrBot 的[日志模块](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/log.py)对噪声依赖单独设门槛的做法，AnyAgent 通过自己的队列处理器过滤，不修改其他日志处理器。core 继续使用标准库模块日志。
+参考 AstrBot 的[日志模块](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/log.py)对噪声依赖单独设门槛的做法，AnyAgent 通过自己的队列处理器过滤，不修改其他日志处理器。core 统一使用项目日志接口。
 
 ## 生命周期
 

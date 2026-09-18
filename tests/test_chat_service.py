@@ -193,8 +193,6 @@ def test_injected_output_limits_prevent_history_commit(limits):
 
 
 def test_run_logs_identify_phases_without_message_or_exception_content(caplog):
-    import logging
-
     async def check():
         repository = MemorySessionRepository(max_sessions=1)
         factory = Factory()
@@ -207,7 +205,7 @@ def test_run_logs_identify_phases_without_message_or_exception_content(caplog):
         await service.shutdown()
         return session.id
 
-    with caplog.at_level(logging.DEBUG, logger="anyagent.core.services.chat"):
+    with caplog.at_level("DEBUG", logger="anyagent.core.services.chat"):
         session_id = asyncio.run(check())
     content = caplog.text
     assert session_id in content

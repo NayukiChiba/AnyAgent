@@ -1,13 +1,79 @@
 """Shared logging with queued console output and rotating UTF-8 files."""
 
+from __future__ import annotations
+
 import logging
 import sys
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
+from typing import TYPE_CHECKING
 
-from anyagent.configs import LoggingSettings
+if TYPE_CHECKING:
+    from anyagent.configs.models import LoggingSettings
 
-logger = logging.getLogger("anyagent")
+
+__all__ = ["AnyAgentLogger", "LogManager", "get_logger", "logger"]
+
+
+class AnyAgentLogger:
+    """Expose project messages without exposing backend logger configuration."""
+
+    def __init__(self, name: str = "anyagent"):
+        if name != "anyagent" and not name.startswith("anyagent."):
+            raise ValueError(
+                "Project logger names must belong to the anyagent namespace"
+            )
+        self._backend = logging.getLogger(name)
+
+    @property
+    def name(self) -> str:
+        return self._backend.name
+
+    def _emit(
+        self,
+        level: int,
+        message: str,
+        args: tuple[object, ...],
+        *,
+        exception: bool = False,
+    ) -> None:
+        self._backend.log(level, message, *args, exc_info=exception, stacklevel=3)
+
+    def debug(self, message: str, *args: object) -> None:
+        self._emit(logging.DEBUG, message, args)
+
+    def info(self, message: str, *args: object) -> None:
+        self._emit(logging.INFO, message, args)
+
+    def warning(self, message: str, *args: object) -> None:
+        self._emit(logging.WARNING, message, args)
+
+    def error(self, message: str, *args: object) -> None:
+        self._emit(logging.ERROR, message, args)
+
+    def critical(self, message: str, *args: object) -> None:
+        self._emit(logging.CRITICAL, message, args)
+
+    def exception(self, message: str, *args: object) -> None:
+        self._emit(logging.ERROR, message, args, exception=True)
+
+
+def get_logger(name: str = "anyagent") -> AnyAgentLogger:
+    """Create a project logger without loading configuration or opening resources.
+
+    Args:
+        name: Project namespace or full module name starting with anyagent.
+
+    Returns:
+        Controlled logging facade with fixed levels and caller attribution.
+
+    Raises:
+        ValueError: The logger name belongs to an external namespace.
+    """
+    return AnyAgentLogger(name)
+
+
+logger = get_logger()
 
 
 class _ApplicationLogFilter(logging.Filter):

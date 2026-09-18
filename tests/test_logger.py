@@ -1,12 +1,14 @@
 import asyncio
 import logging
+import subprocess
+import sys
 
 import pytest
 
 from anyagent.configs import LoggingSettings, paths
 from anyagent.core.domain.chat import Message, Session
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
-from anyagent.utils.logger import LogManager, logger
+from anyagent.utils.logger import AnyAgentLogger, LogManager, get_logger, logger
 
 
 @pytest.fixture
@@ -116,7 +118,7 @@ def test_project_logs_exclude_dependency_chatter_and_keep_failures(log_settings,
     LogManager.configure(settings)
     logger.info("Project lifecycle info")
     logger.debug("Project execution debug")
-    logging.getLogger("anyagent.core.services.chat").info("Project agent info")
+    get_logger("anyagent.core.services.chat").info("Project agent info")
     for name in (
         "uvicorn.access",
         "uvicorn.error",
@@ -163,3 +165,40 @@ def test_dependency_threshold_is_configurable_and_database_parameters_stay_priva
     content = settings.file_path.read_text()
     assert "Explicit dependency debug" in content
     assert "Private" not in content
+
+
+def test_custom_logger_preserves_caller_and_controls_public_api(caplog):
+    module_logger = get_logger("anyagent.tests.logger")
+    assert isinstance(logger, AnyAgentLogger)
+    assert isinstance(module_logger, AnyAgentLogger)
+    assert not isinstance(module_logger, logging.Logger)
+    assert module_logger.name == "anyagent.tests.logger"
+    for member in ("addHandler", "removeHandler", "setLevel", "handlers", "log"):
+        assert not hasattr(module_logger, member)
+    with pytest.raises(ValueError):
+        get_logger("external.client")
+    with pytest.raises(AttributeError):
+        module_logger.name = "external.client"
+    with caplog.at_level("INFO", logger=module_logger.name):
+        module_logger.info("Caller marker: %s", "中文")
+    record = caplog.records[-1]
+    assert record.getMessage() == "Caller marker: 中文"
+    assert record.filename == "test_logger.py"
+    assert (
+        record.funcName == "test_custom_logger_preserves_caller_and_controls_public_api"
+    )
+
+
+def test_logger_and_core_import_do_not_load_configuration(runtime_paths):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from anyagent.core.services.chat import ChatService; from anyagent.utils.logger import logger, AnyAgentLogger; assert isinstance(logger, AnyAgentLogger); assert 'anyagent.configs' not in sys.modules",
+        ],
+        cwd=runtime_paths,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr

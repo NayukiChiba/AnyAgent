@@ -1,6 +1,5 @@
 """Persist complete bounded session snapshots with short SQLite transactions."""
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -12,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from anyagent.core.domain.chat import ChatError, Message, Session
 from anyagent.infrastructure.sqlite.models import Base, SessionRecord
+from anyagent.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SQLiteSessionRepository:

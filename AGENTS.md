@@ -71,7 +71,7 @@ feat(config): 从 JSON 加载运行配置
 - 项目通过根目录 `main.py` 启动。
 - Python 代码只允许绝对导入，禁止 `from . ...`、`from .. ...` 等相对导入；该规则同样适用于包内模块、`__init__.py`、测试和类型检查分支。项目内导入使用完整的 `anyagent...` 模块路径，如 `from anyagent.configs.base import BaseSettings`，并继续遵守洋葱分层的依赖方向。Ruff 的 TID252 规则以 ban-relative-imports="all" 检查此约束。
 - 应用源码放在根目录 `anyagent/` 的职责子目录中，包根仅保留用于包标识和版本号的 `__init__.py`，不放业务实现。直接通过 Python 模块导入，不使用 `src/` 层或项目自身的打包安装；uv 只管理依赖，不生成项目的 `egg-info`。`__version__` 与 `pyproject.toml` 中的版本保持一致，不依赖安装元数据。
-- 采用依赖向内的洋葱分层：`core/domain/` 放领域模型和规则，`core/ports/` 定义替换契约，`core/services/`、`core/pipeline/` 及工具、MCP、知识和上下文子目录放应用流程。core 不导入 api、runtime、adapters、infrastructure、utils、configs、Web 框架、ORM 或厂商 SDK；必要配置通过运行快照注入。
+- 采用依赖向内的洋葱分层：`core/domain/` 放领域模型和规则，`core/ports/` 定义替换契约，`core/services/`、`core/pipeline/` 及工具、MCP、知识和上下文子目录放应用流程。core 不导入 api、runtime、adapters、infrastructure、configs、Web 框架、ORM 或厂商 SDK；必要配置通过运行快照注入；utils 中仅允许依赖无运行配置与资源初始化的 anyagent.utils.logger 日志接口，不依赖其他 utils 模块。
 - Port 是应用依赖的能力边界，优先以 Protocol 声明最小方法契约；实现不要求继承。Service 通过构造参数获取端口并组织用例，不为每个 Service 添加无替换需求的接口或统一 BaseService。Protocol 的运行时属性检查不代替签名检查、契约测试或实际执行验收。
 - 责任链用于 pipeline 的阶段顺序与中止，洋葱中间件通过 call_next 包裹下游并管理 finally 清理；call_next 最多调用一次，事件流由执行阶段消费，不按每个 token 重跑下游阶段。Port、Service 和配置模型不承担责任链节点职责。
 - `api/` 放 HTTP 路由、DTO、鉴权依赖、响应与 SSE 转换；`adapters/` 放 Runner、Provider、MCP 协议及检索实现；`infrastructure/` 放仓储和文件实现；`runtime/` 是依赖装配与生命周期入口，负责显式注册。新增 Runner 不在通用 pipeline 或 API 中添加厂商分支。
@@ -86,7 +86,8 @@ feat(config): 从 JSON 加载运行配置
 - 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
 
 - 日志 INFO 记录项目生命周期与执行结果，DEBUG 记录执行阶段、耗时和数量，不输出聊天正文、工具参数或密钥。依赖日志默认至少 WARNING，由 logging_config 的 third_party_level 配置；数据库与模型 HTTP 客户端的 DEBUG/INFO 始终过滤，main.py 关闭 HTTP 访问日志。
-- 外层日志统一使用 `anyagent.utils.logger`；core 使用标准库日志接口，不依赖日志文件实现。日志路径和轮转参数来自共享配置，日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
+- 全项目（包括 core、configs、infrastructure、adapters、api、runtime 与启动入口）统一使用自定义 `anyagent.utils.logger.AnyAgentLogger`：通过 `from anyagent.utils.logger import logger` 获取共享入口，或通过 `get_logger(__name__)` 获取模块入口。禁止业务代码直接导入原生 logging、调用 logging.getLogger，或自行创建 Handler、设置日志级别和输出。原生 logging 仅作为 utils/logger.py 内部输出与第三方兼容实现；专门验证日志兼容层的测试可使用原生 logging 注入依赖记录。
+- 自定义接口仅公开 debug、info、warning、error、critical、exception 固定方法与只读名称，不返回原生 Logger。级别、队列、过滤、格式、轮转及生命周期集中由 LogManager 管理；日志模块导入不加载配置、不创建文件或线程，LoggingSettings 仅用于类型检查，runtime 显式传入配置。core 对该通用接口的依赖是跨层日志支撑的明确例外，不扩展到配置、文件或其他工具实现。日志路径和轮转参数来自共享配置，日志文件必须位于 `data/logs/`，服务退出时清空队列并关闭本模块的处理器。
 - 文档使用 VitePress，`package.json`、锁文件和依赖安装均在 `docs/` 内；修改文档需运行 `npm ci` 和 `npm run build`，不提交构建产物或缓存。
 
 ## 当前 Agent 迭代约定

@@ -17,7 +17,7 @@ uv run ruff format --check .
 
 包根 anyagent 仅保留 __init__.py。当前 main.py 通过 anyagent.runtime.bootstrap.create_app 装配应用，api/app.py 构造 FastAPI，api/routes/health.py 提供健康检查，utils/logger.py 管理日志。
 
-当前 core/domain、core/ports 和 core/services 已实现会话闭环；adapters/runners/langchain 实现真实 SDK，infrastructure/sqlite 通过 SQLAlchemy 与 aiosqlite 提供会话仓储，infrastructure/memory 用于隔离连接测试和单元测试。后续 pipeline、Provider、MCP 和检索随用例扩展。core 只依赖领域与端口，不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
+当前 core/domain、core/ports 和 core/services 已实现会话闭环；adapters/runners/langchain 实现真实 SDK，infrastructure/sqlite 通过 SQLAlchemy 与 aiosqlite 提供会话仓储，infrastructure/memory 用于隔离连接测试和单元测试。后续 pipeline、Provider、MCP 和检索随用例扩展。core 依赖领域与端口，日志统一通过无配置加载副作用的 anyagent.utils.logger 自定义接口（跨层支撑的明确例外）；除此之外不导入外层模块、全局 configs、FastAPI、ORM 或厂商 SDK。runtime 获取配置、显式注册实现并注入应用服务；HTTP 类型和错误转换留在 api。
 
 配置代码位于 anyagent/configs，JSON 位于根目录 data/configs。BaseSettings 只统一配置值校验，不作为领域、Port 或 Service 的公共父类；core 使用 runtime 注入的必要配置值。
 
