@@ -114,3 +114,50 @@ def test_busy_cancel_timeout_and_cleanup():
         assert missing.value.code == "session_not_found"
 
     asyncio.run(check())
+
+
+def test_disconnect_during_cleanup_keeps_owned_disposal_alive():
+    async def check():
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class SlowCloseRunner(Runner):
+            async def aclose(self):
+                started.set()
+                await release.wait()
+                self.closed = True
+
+        factory = Factory()
+        factory.next = SlowCloseRunner()
+        service = ChatService(MemorySessionRepository(), factory)
+        session = await service.create_session()
+        task = asyncio.create_task(collect(service, session.id))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not factory.next.closed
+        release.set()
+        await service.shutdown()
+        assert factory.next.closed
+        assert not service._active
+        assert not service._closing
+
+    asyncio.run(check())
+
+
+def test_cleanup_failure_does_not_replace_successful_result():
+    async def check():
+        class FailedCloseRunner(Runner):
+            async def aclose(self):
+                raise RuntimeError("secret in SDK cleanup")
+
+        factory = Factory()
+        factory.next = FailedCloseRunner()
+        repository = MemorySessionRepository()
+        service = ChatService(repository, factory)
+        session = await service.create_session()
+        assert (await collect(service, session.id))[-1].type == "result"
+        assert len((await repository.get(session.id)).messages) == 2
+
+    asyncio.run(check())

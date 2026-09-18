@@ -110,11 +110,14 @@ class LangChainRunner:
         yield Event("result", {"content": final})
 
     async def aclose(self) -> None:
-        for client in self.clients:
-            if hasattr(client, "aclose"):
-                await client.aclose()
-            else:
-                client.close()
+        try:
+            for client in self.clients:
+                if hasattr(client, "aclose"):
+                    await client.aclose()
+        finally:
+            for client in self.clients:
+                if not hasattr(client, "aclose"):
+                    client.close()
 
 
 class LangChainRunnerFactory:
@@ -155,6 +158,8 @@ class LangChainRunnerFactory:
                 model, self.settings, clients=(async_client, sync_client)
             )
         except BaseException:
-            await async_client.aclose()
-            sync_client.close()
+            try:
+                await async_client.aclose()
+            finally:
+                sync_client.close()
             raise

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
-from anyagent.core.ports.chat import RunnerFactory, SessionRepository
+from anyagent.core.ports.chat import AgentRunner, RunnerFactory, SessionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class ChatService:
         self.max_concurrent_runs = max_concurrent_runs
         self.max_history_messages = max_history_messages // 2 * 2
         self._active: dict[str, asyncio.Task] = {}
+        self._closing: set[asyncio.Task] = set()
 
     async def create_session(self) -> Session:
         session = Session(uuid4().hex, "新会话", datetime.now(UTC).isoformat())
@@ -110,9 +111,23 @@ class ChatService:
         finally:
             try:
                 if runner is not None:
-                    await runner.aclose()
+                    await self._dispose(runner)
             finally:
                 self._active.pop(session_id, None)
+
+    async def _dispose(self, runner: AgentRunner) -> None:
+        async def close():
+            try:
+                async with asyncio.timeout(5):
+                    await runner.aclose()
+            except Exception as exc:
+                logger.warning("Runner cleanup failed: %s", type(exc).__name__)
+
+        task = asyncio.create_task(close())
+        self._closing.add(task)
+        task.add_done_callback(self._closing.discard)
+        # Disconnect cancellation must not interrupt disposal of owned connections.
+        await asyncio.shield(task)
 
     async def shutdown(self) -> None:
         tasks = set(self._active.values()) - {asyncio.current_task()}
@@ -120,3 +135,5 @@ class ChatService:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if self._closing:
+            await asyncio.gather(*tuple(self._closing), return_exceptions=True)
