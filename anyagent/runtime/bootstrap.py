@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -14,6 +15,8 @@ from anyagent.configs import (
     paths,
 )
 from anyagent.configs.agent import LangChainSettings
+from anyagent.configs.management import ConfigurationManager
+from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import RunnerFactory
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.memory.sessions import MemorySessionRepository
@@ -33,10 +36,12 @@ def create_app(
         settings = agent_settings or load_langchain_config()
         load_model_config()
         load_frontend_config()
+        app.state.configuration_manager = ConfigurationManager()
+        factory = runner_factory or LangChainRunnerFactory(settings)
         repository = MemorySessionRepository(max_sessions=settings.max_sessions)
         app.state.chat_service = ChatService(
             repository,
-            runner_factory or LangChainRunnerFactory(settings),
+            factory,
             timeout_seconds=settings.run_timeout_seconds,
             max_history_messages=settings.max_history_messages,
             max_concurrent_runs=settings.max_concurrent_runs,
@@ -45,6 +50,34 @@ def create_app(
             max_event_chars=settings.max_event_chars,
             cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
         )
+
+        # Connection probes use an isolated repository and the normal bounded lifecycle.
+        probe = ChatService(
+            MemorySessionRepository(max_sessions=1),
+            factory,
+            timeout_seconds=settings.run_timeout_seconds,
+            max_history_messages=settings.max_history_messages,
+            max_concurrent_runs=1,
+            max_input_chars=settings.max_input_chars,
+            max_output_chars=settings.max_output_chars,
+            max_event_chars=settings.max_event_chars,
+            cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
+        )
+        probe_lock = asyncio.Lock()
+
+        async def test_model() -> None:
+            if probe_lock.locked():
+                raise ChatError("probe_busy", "已有模型连接测试正在进行，请稍后重试")
+            async with probe_lock:
+                session = await probe.create_session()
+                try:
+                    async with aclosing(probe.stream(session.id, "?")) as events:
+                        async for _ in events:
+                            pass
+                finally:
+                    await probe.delete_session(session.id)
+
+        app.state.test_model = test_model
 
         def agent_info() -> dict:
             connection = load_model_config()
@@ -68,6 +101,7 @@ def create_app(
             yield
         finally:
             app.state.ready = False
+            await probe.shutdown()
             await app.state.chat_service.shutdown()
             logger.info("Application shutdown complete")
 

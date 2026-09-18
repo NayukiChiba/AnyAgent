@@ -40,6 +40,10 @@ class ModelSettings(BaseSettings):
             raise ValueError(
                 "Model base URL cannot contain credentials, query or fragment"
             )
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            raise ValueError("Model URL port must be between 1 and 65535")
+        if value.rstrip("/").endswith("/chat/completions"):
+            raise ValueError("Model URL must be a base URL, not a completion endpoint")
         return value.rstrip("/")
 
     @model_validator(mode="after")

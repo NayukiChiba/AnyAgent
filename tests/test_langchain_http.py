@@ -21,6 +21,8 @@ def configured_app(tmp_path, monkeypatch, model_endpoint):
     monkeypatch.setattr(paths, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(paths, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(paths, "CONFIGS_DIR", tmp_path / "data/configs")
+    monkeypatch.setattr(paths, "LOGS_DIR", tmp_path / "data/logs")
+    monkeypatch.setattr(paths, "LEGACY_CONFIG_FILE", tmp_path / "data/config.json")
     paths.get_configs_dir().mkdir(parents=True)
     connection = {
         "enabled": True,

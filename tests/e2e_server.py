@@ -16,8 +16,15 @@ def main():
         TemporaryDirectory(prefix="anyagent-e2e-") as directory,
         open_model_endpoint() as (base_url, _),
     ):
+        index = paths.get_frontend_index_path()
+        assets = paths.get_frontend_assets_dir()
+        paths.get_frontend_index_path = lambda: index
+        paths.get_frontend_assets_dir = lambda: assets
+        paths.PROJECT_ROOT = Path(directory)
         paths.DATA_DIR = Path(directory) / "data"
         paths.CONFIGS_DIR = paths.DATA_DIR / "configs"
+        paths.LOGS_DIR = paths.DATA_DIR / "logs"
+        paths.LEGACY_CONFIG_FILE = paths.DATA_DIR / "config.json"
         paths.get_configs_dir().mkdir(parents=True)
         paths.get_config_path("model_config").write_text(
             json.dumps(

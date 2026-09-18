@@ -14,6 +14,7 @@ def install_frontend(app: FastAPI, *, index_file: Path, assets_dir: Path) -> Non
         name="frontend-assets",
     )
 
+    @app.get("/settings", include_in_schema=False, response_model=None)
     @app.get("/", include_in_schema=False, response_model=None)
     async def frontend():
         if not index_file.is_file():

@@ -1,5 +1,7 @@
 """Typed schemas for independently loaded JSON configurations."""
 
+import ipaddress
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -23,6 +25,22 @@ class ServerSettings(BaseSettings):
 
     host: str = Field(min_length=1)
     port: int = Field(ge=1, le=65535)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            labels = value.rstrip(".").split(".")
+            if len(value) > 253 or not all(
+                re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                for label in labels
+            ):
+                raise ValueError(
+                    "Server host must be an IP address or hostname"
+                ) from None
+        return value
 
 
 class LoggingSettings(BaseSettings):

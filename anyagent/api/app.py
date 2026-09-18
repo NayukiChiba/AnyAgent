@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from anyagent import __version__
 from anyagent.api.routes.chat import router as chat_router
 from anyagent.api.routes.health import router as health_router
+from anyagent.api.routes.settings import router as settings_router
 
 
 def build_app(
@@ -22,4 +23,5 @@ def build_app(
     app.state.ready = False
     app.include_router(health_router)
     app.include_router(chat_router)
+    app.include_router(settings_router)
     return app
