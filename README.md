@@ -84,7 +84,7 @@ Agent 回复支持 Markdown 标题、列表、引用、表格、链接和图片�
 对话中止。网页等待新的服务就绪后重新打开设置，修改端口时跳转到新端口。重启前
 会检查新监听地址和端口，准备失败时保留当前服务。
 
-命令行 `--host`、`--port` 在重启后继续覆盖配置。`frontend_config.json` 的 `restart_poll_interval_ms`、`restart_wait_timeout_seconds` 控制网页检查间隔和等待时限，可在“网页偏好”的高级设置调整。外部 ASGI 启动不提供进程重启能力。
+命令行 `--host`、`--port` 在重启后继续覆盖配置。`frontend_config.json` 的 `restart_poll_interval_ms`、`restart_wait_timeout_seconds` 控制网页检查间隔和等待时限，可在“网页偏好”调整。外部 ASGI 启动不提供进程重启能力。
 
 ## Agent 接口
 
@@ -121,7 +121,7 @@ WebSocket 发送 `{"type":"message","content":"请使用工具计算 2+3"}`，�
 - `data/configs/logging_config.json`：项目日志级别、依赖日志最低级别和轮转参数，修改后重启；INFO 记录对话、模型回复和工具参数/结果，认证字段脱敏；默认过滤依赖 DEBUG/INFO，关闭 HTTP 访问日志。
 - `data/configs/model_config.json`：模型连接与密钥，新执行热重载。
 - `data/configs/langchain_config.json`：Agent prompt、步骤、历史、并发、输入/输出/事件大小和清理时限，修改后重启。
-- `data/configs/frontend_config.json`：前端默认连接和取消确认等待时间；刷新配置读取，默认连接在重新加载页面时采用。
+- `data/configs/frontend_config.json`：前端默认连接和取消确认等待时间；保存后已打开的聊天页自动同步，也可通过“刷新配置”重新读取。
 - `data/configs/database_config.json`：SQLite 文件路径与锁等待时限，修改后重启。
 - `data/anyagent.db`：会话标题、创建时间及已完成的历史窗口。
 - `data/logs/anyagent.log`：应用和服务器日志。
