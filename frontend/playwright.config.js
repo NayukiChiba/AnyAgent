@@ -10,7 +10,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: '.venv/bin/python -m tests.e2e_server',
+    command: 'uv run python -m tests.e2e_server',
     cwd: '..',
     url: 'http://127.0.0.1:18765/health/ready',
     reuseExistingServer: false,
