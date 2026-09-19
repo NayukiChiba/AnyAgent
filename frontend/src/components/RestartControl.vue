@@ -2,7 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { request } from '../api.js'
 import '../restart.css'
-const props = defineProps({ preferences: { type: Object, required: true }, disabled: Boolean })
+const props = defineProps({
+  preferences: { type: Object, required: true },
+  disabled: Boolean,
+  pending: Boolean,
+})
 const emit = defineEmits(['busy'])
 const supported = ref(false)
 const restarting = ref(false)
@@ -15,9 +19,11 @@ let timeoutTimer
 let wake
 let disposed = false
 const explanation = computed(() =>
-  supported.value
-    ? '重新加载已保存的设置，聊天记录会保留。'
-    : '通过 main.py 启动服务后可在此重启。',
+  !supported.value
+    ? '通过 main.py 启动服务后可在此重启。'
+    : props.pending
+      ? '有已保存的系统设置等待重启生效。'
+      : '重新加载服务，已保存的聊天记录会保留。',
 )
 async function restart() {
   if (!window.confirm('确定重启整个服务吗？正在进行的对话会停止，已保存的聊天记录会保留。')) return
@@ -97,15 +103,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="restart-panel" aria-label="服务重启">
-    <div>
-      <strong>重启服务</strong>
-      <p>{{ explanation }}</p>
-    </div>
+  <div class="restart-control">
     <button
       type="button"
       class="restart-button"
       :disabled="disabled || !supported || restarting"
+      :title="explanation"
       @click="restart"
     >
       {{ restarting ? '正在重启…' : '重启服务' }}
@@ -118,5 +121,5 @@ onBeforeUnmount(() => {
     >
       {{ message }}<a v-if="failed && target" :href="target">重新打开设置 ↗</a>
     </p>
-  </section>
+  </div>
 </template>
