@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import SettingSelect from '../components/SettingSelect.vue'
 import MarkdownMessage from '../components/MarkdownMessage.vue'
 import { request, streamHttp, streamWebSocket } from '../api.js'
+import { FRONTEND_CONFIG_REVISION_KEY } from '../configSync.js'
 
 const agent = ref(null)
 const sessions = ref([])
@@ -30,10 +31,10 @@ async function scrollToEnd() {
   await nextTick()
   if (thread.value) thread.value.scrollTop = thread.value.scrollHeight
 }
-async function refreshAgent() {
+async function refreshAgent({ syncTransport = false } = {}) {
   try {
     agent.value = await request('/api/v1/agent')
-    if (!transport.value) transport.value = agent.value.frontend.default_transport
+    if (syncTransport || !transport.value) transport.value = agent.value.frontend.default_transport
   } catch (error) {
     notice.value = error.message
   }
@@ -132,9 +133,13 @@ function handleKey(event) {
     send()
   }
 }
+function handleConfigStorage(event) {
+  if (event.key === FRONTEND_CONFIG_REVISION_KEY) refreshAgent({ syncTransport: true })
+}
 onMounted(async () => {
+  window.addEventListener('storage', handleConfigStorage)
   try {
-    await refreshAgent()
+    await refreshAgent({ syncTransport: true })
     await refreshSessions()
     if (sessions.value.length) await selectSession(sessions.value[0].id)
     else await newSession()
@@ -144,7 +149,10 @@ onMounted(async () => {
     loading.value = false
   }
 })
-onBeforeUnmount(stop)
+onBeforeUnmount(() => {
+  stop()
+  window.removeEventListener('storage', handleConfigStorage)
+})
 onBeforeRouteLeave(
   () => !busy.value || window.confirm('回复仍在生成，离开页面将停止生成。确定离开吗？'),
 )
@@ -231,7 +239,13 @@ onBeforeRouteLeave(
               { value: 'http', label: 'HTTP · SSE' },
             ]"
           />
-          <button class="text-button" :disabled="busy" @click="refreshAgent">刷新配置</button>
+          <button
+            class="text-button"
+            :disabled="busy"
+            @click="refreshAgent({ syncTransport: true })"
+          >
+            刷新配置
+          </button>
         </div>
       </section>
       <div v-if="agent && !agent.configured" class="config-hint">
