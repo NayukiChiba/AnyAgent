@@ -23,18 +23,20 @@ test('settings save a model, preserve its key, test the SDK connection and open 
     await page.getByRole('link', { name: '设置', exact: true }).click()
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
+    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
     await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
       'placeholder',
-      '密钥已保存，留空保留',
+      '填写 API Key',
     )
     await page.getByLabel('流式输出', { exact: true }).uncheck()
+    await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
+    await expect(page.locator('.settings-action-dock')).toHaveCSS('position', 'fixed')
     await expect(page.getByRole('button', { name: '测试已保存的连接' })).toBeDisabled()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
     await page.reload()
     await expect(page.getByLabel('流式输出', { exact: true })).not.toBeChecked()
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
+    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
     const before = await (await request.get('/api/v1/sessions')).json()
     await page.getByRole('button', { name: '测试已保存的连接' }).click()
     await expect(page.getByRole('status')).toContainText('模型连接正常')
@@ -59,7 +61,10 @@ test('all configuration groups render with validation, dirty guards and restart 
   const original = await savedGroup(request, 'cmd_config')
   try {
     await page.goto('/settings')
-    await page.getByRole('button', { name: '服务', exact: true }).click()
+    await page.getByRole('button', { name: '系统设置', exact: true }).click()
+    for (const name of ['Agent 行为', '会话存储', '日志', '服务'])
+      await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+    await expect(page.getByText('高级设置')).toHaveCount(0)
     await page.getByLabel('服务端口').fill('0')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('alert').first()).toContainText('请检查标出的设置')
@@ -69,22 +74,23 @@ test('all configuration groups render with validation, dirty guards and restart 
     )
     page.once('dialog', (dialog) => dialog.dismiss())
     await page.getByRole('button', { name: '网页偏好', exact: true }).click()
-    await expect(page.getByRole('heading', { name: '服务', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '系统设置', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '撤销修改' }).click()
     await page.getByLabel('服务端口').fill('9001')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('需要重启服务')
-    for (const name of ['Agent 行为', '网页偏好', '会话存储', '日志', '模型连接']) {
+    for (const name of ['网页偏好', '模型连接']) {
       await page.getByRole('button', { name, exact: true }).click()
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     }
+    await expect(page.getByLabel('回答随机性')).toBeVisible()
     page.once('dialog', (dialog) => dialog.accept())
-    await page.getByRole('button', { name: '恢复本组默认值' }).click()
+    await page.getByRole('button', { name: '恢复模型连接默认值' }).click()
     await expect(page.getByLabel('启用模型')).not.toBeChecked()
     await expect(page.getByLabel('模型名称', { exact: true })).toHaveValue('')
     await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
       'placeholder',
-      '密钥已保存，留空保留',
+      '填写 API Key',
     )
     await page.getByRole('button', { name: '撤销修改' }).click()
     await expect(page.getByLabel('启用模型')).toBeChecked()
@@ -113,7 +119,7 @@ test('first use configures a disabled model entirely in the web UI', async ({ pa
     await page.getByLabel('启用模型').check()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
+    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
     await page.getByRole('button', { name: '测试已保存的连接' }).click()
     await expect(page.getByRole('status')).toContainText('模型连接正常')
     await page.getByRole('link', { name: '返回聊天' }).click()

@@ -441,3 +441,158 @@
     padding: 15px 12px;
   }
 }
+
+/* Unified settings pages and persistent actions. */
+.settings-main {
+  position: relative;
+  padding-bottom: 112px;
+}
+.settings-dirty-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 12px 40px;
+  border-bottom: 1px solid #efd194;
+  background: #fff8e8;
+  color: #8a5b12;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 5px 18px #78581612;
+}
+.settings-content form {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.settings-group-card {
+  margin-bottom: 22px;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 3px 14px #22375805;
+}
+.group-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.change-state.unsaved {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff1d5;
+  color: #986515;
+  font-weight: 600;
+}
+.group-default {
+  flex-shrink: 0;
+}
+.system-page-intro {
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  border: 1px solid #dce4fa;
+  border-radius: 10px;
+  background: #edf1fb;
+  color: #4b6198;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.system-page-title {
+  margin: 0 0 14px;
+  font-size: 23px;
+}
+.system-page-intro strong {
+  display: block;
+}
+.settings-group-card .setting-field:last-of-type {
+  border-bottom: 0;
+}
+.stored-secret {
+  letter-spacing: 0.16em;
+  color: #4e5a70 !important;
+}
+.settings-notice {
+  position: static;
+}
+.settings-action-dock {
+  position: fixed;
+  right: 28px;
+  bottom: 22px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 300px);
+  padding: 12px;
+  border: 1px solid #dce2ec;
+  border-radius: 14px;
+  background: #fffffff5;
+  box-shadow: 0 12px 36px #1b294124;
+  backdrop-filter: blur(12px);
+}
+.action-summary {
+  margin: 0 6px;
+  color: #657187;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.settings-action-dock .icon-button,
+.settings-action-dock .save-settings,
+.settings-action-dock .restart-button {
+  min-height: 42px;
+  padding: 10px 17px;
+  white-space: nowrap;
+}
+.restart-control {
+  position: relative;
+}
+.restart-control .restart-feedback {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 16px);
+  width: min(380px, calc(100vw - 32px));
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #d7e0f6;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 8px 26px #2237581f;
+}
+
+@media (max-width: 760px) {
+  .settings-main {
+    padding-bottom: 126px;
+  }
+  .settings-dirty-banner {
+    padding: 11px 18px;
+  }
+  .settings-group-card {
+    padding: 22px 18px;
+    border-radius: 12px;
+  }
+  .group-heading {
+    align-items: flex-start;
+  }
+  .group-heading > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .settings-action-dock {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    max-width: none;
+    justify-content: flex-end;
+    overflow-x: auto;
+  }
+  .action-summary {
+    display: none;
+  }
+  .settings-action-dock .icon-button,
+  .settings-action-dock .save-settings,
+  .settings-action-dock .restart-button {
+    padding: 10px 13px;
+  }
+}

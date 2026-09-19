@@ -6,10 +6,11 @@ import RestartControl from '../components/RestartControl.vue'
 import { request } from '../api.js'
 import '../settings.css'
 
+const SYSTEM_PAGE = 'system'
 const groups = ref([])
 const selected = ref('model_config')
-const form = ref({})
-const baseline = ref('{}')
+const forms = ref({})
+const baselines = ref({})
 const clearApiKey = ref(false)
 const loading = ref(true)
 const saving = ref(false)
@@ -18,12 +19,30 @@ const restarting = ref(false)
 const notice = ref('')
 const failed = ref(false)
 const errors = ref({})
-const advanced = ref(false)
-const group = computed(() => groups.value.find((item) => item.name === selected.value))
-const dirty = computed(() => JSON.stringify(form.value) !== baseline.value || clearApiKey.value)
+
+const systemGroups = computed(() => groups.value.filter((item) => item.apply_mode === 'restart'))
+const navigationItems = computed(() => {
+  const items = groups.value.filter((item) => item.apply_mode !== 'restart')
+  if (systemGroups.value.length)
+    items.push({
+      name: SYSTEM_PAGE,
+      title: '系统设置',
+      restart_required: systemGroups.value.some((item) => item.restart_required),
+    })
+  return items
+})
+const visibleGroups = computed(() =>
+  selected.value === SYSTEM_PAGE
+    ? systemGroups.value
+    : groups.value.filter((item) => item.name === selected.value),
+)
 const working = computed(() => saving.value || testing.value || restarting.value)
-const basicFields = computed(() => group.value?.fields.filter((field) => !field.advanced) || [])
-const advancedFields = computed(() => group.value?.fields.filter((field) => field.advanced) || [])
+const dirtyGroups = computed(() => visibleGroups.value.filter((item) => isGroupDirty(item)))
+const dirty = computed(() => dirtyGroups.value.length > 0)
+const restartPending = computed(() => systemGroups.value.some((item) => item.restart_required))
+const frontendPreferences = computed(
+  () => groups.value.find((item) => item.name === 'frontend_config')?.values,
+)
 
 function getValue(values, path) {
   return path.split('.').reduce((node, key) => node?.[key], values)
@@ -33,12 +52,23 @@ function setValue(values, path, value) {
   const node = keys.slice(0, -1).reduce((result, key) => (result[key] ??= {}), values)
   node[keys.at(-1)] = value
 }
-function loadForm(values = group.value.values) {
-  form.value = Object.fromEntries(
-    group.value.fields.map((field) => [field.path, getValue(values, field.path)]),
+function valuesFor(item, values = item.values) {
+  return Object.fromEntries(item.fields.map((field) => [field.path, getValue(values, field.path)]))
+}
+function fillGroup(item, values = item.values) {
+  forms.value[item.name] = valuesFor(item, values)
+  errors.value[item.name] = {}
+}
+function loadGroup(item) {
+  fillGroup(item)
+  baselines.value[item.name] = JSON.stringify(forms.value[item.name])
+  if (item.name === 'model_config') clearApiKey.value = false
+}
+function isGroupDirty(item) {
+  return (
+    JSON.stringify(forms.value[item.name]) !== baselines.value[item.name] ||
+    (item.name === 'model_config' && clearApiKey.value)
   )
-  clearApiKey.value = false
-  errors.value = {}
 }
 function discardAllowed() {
   return !dirty.value || window.confirm('有尚未保存的修改，确定放弃这些修改吗？')
@@ -49,8 +79,7 @@ async function reload() {
   notice.value = ''
   try {
     groups.value = (await request('/api/v1/settings')).groups
-    loadForm()
-    baseline.value = JSON.stringify(form.value)
+    for (const item of groups.value) loadGroup(item)
     failed.value = false
   } catch (error) {
     failed.value = true
@@ -61,21 +90,19 @@ async function reload() {
 }
 function selectGroup(name) {
   if (name === selected.value || working.value || !discardAllowed()) return
+  for (const item of visibleGroups.value) loadGroup(item)
   selected.value = name
-  loadForm()
-  baseline.value = JSON.stringify(form.value)
   notice.value = ''
-  advanced.value = false
 }
 function undo() {
-  loadForm()
-  baseline.value = JSON.stringify(form.value)
+  for (const item of visibleGroups.value) loadGroup(item)
   notice.value = ''
 }
-function defaults() {
-  if (!window.confirm('将本组设置恢复为默认值，点击保存后才会写入。确定继续吗？')) return
-  loadForm(group.value.defaults)
-  notice.value = `默认值已填入，请检查后点击保存。${selected.value === 'model_config' ? '原密钥会保留，清除密钥需要单独选择。' : ''}`
+function defaults(item) {
+  if (!window.confirm(`将“${item.title}”恢复为默认值，点击保存后才会写入。确定继续吗？`)) return
+  fillGroup(item, item.defaults)
+  if (item.name === 'model_config') clearApiKey.value = false
+  notice.value = `“${item.title}”默认值已填入，请检查后点击保存。${item.name === 'model_config' ? '原密钥会保留，清除密钥需要单独选择。' : ''}`
   failed.value = false
 }
 function clearKey() {
@@ -89,38 +116,55 @@ function clearKey() {
     )
   ) {
     clearApiKey.value = true
-    form.value.api_key = ''
+    forms.value.model_config.api_key = ''
   }
 }
+function replaceGroup(result) {
+  groups.value = groups.value.map((item) => (item.name === result.name ? result : item))
+  loadGroup(result)
+}
+async function focusFirstError(item) {
+  await nextTick()
+  const first = Object.keys(errors.value[item.name] || {})[0]
+  document.getElementById(`setting-${item.name}-${first?.replaceAll('.', '-')}`)?.focus()
+}
 async function save() {
+  const pending = [...dirtyGroups.value]
+  if (!pending.length) return
   saving.value = true
   notice.value = ''
-  errors.value = {}
-  const values = JSON.parse(JSON.stringify(group.value.values))
-  for (const [path, value] of Object.entries(form.value)) setValue(values, path, value)
+  failed.value = false
+  let savedCount = 0
   try {
-    const result = await request(`/api/v1/settings/${selected.value}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        values,
-        revision: group.value.revision,
-        clear_api_key: clearApiKey.value,
-      }),
-    })
-    groups.value = groups.value.map((item) => (item.name === result.name ? result : item))
-    loadForm()
-    baseline.value = JSON.stringify(form.value)
-    failed.value = false
-    notice.value = `设置已保存。${result.apply_notice}`
-  } catch (error) {
-    failed.value = true
-    notice.value = error.message
-    errors.value = error.fields || {}
-    if (group.value.fields.some((field) => field.advanced && errors.value[field.path]))
-      advanced.value = true
-    await nextTick()
-    const first = Object.keys(errors.value)[0]
-    document.getElementById(`setting-${first?.replaceAll('.', '-')}`)?.focus()
+    for (const item of pending) {
+      errors.value[item.name] = {}
+      const values = JSON.parse(JSON.stringify(item.values))
+      for (const [path, value] of Object.entries(forms.value[item.name]))
+        setValue(values, path, value)
+      try {
+        const result = await request(`/api/v1/settings/${item.name}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            values,
+            revision: item.revision,
+            clear_api_key: item.name === 'model_config' && clearApiKey.value,
+          }),
+        })
+        replaceGroup(result)
+        savedCount++
+      } catch (error) {
+        failed.value = true
+        errors.value[item.name] = error.fields || {}
+        notice.value = `${savedCount ? `已保存 ${savedCount} 组设置；` : ''}${error.message}`
+        await focusFirstError(item)
+        return
+      }
+    }
+    const applyNotice =
+      selected.value === SYSTEM_PAGE
+        ? '系统设置已保存，需要重启服务后生效。'
+        : groups.value.find((item) => item.name === selected.value)?.apply_notice
+    notice.value = `设置已保存。${applyNotice || ''}`
   } finally {
     saving.value = false
   }
@@ -139,7 +183,7 @@ async function testConnection() {
   }
 }
 watch(
-  () => form.value.api_key,
+  () => forms.value.model_config?.api_key,
   (value) => {
     if (value) clearApiKey.value = false
   },
@@ -166,7 +210,7 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
       <div class="settings-caption">设置</div>
       <nav aria-label="设置分类">
         <button
-          v-for="item in groups"
+          v-for="item in navigationItems"
           :key="item.name"
           :class="{ active: item.name === selected }"
           :disabled="working"
@@ -185,6 +229,7 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
         </div>
         <button class="icon-button" :disabled="loading || working" @click="reload">重新载入</button>
       </header>
+      <div v-if="dirty" class="settings-dirty-banner" role="status">已修改配置，请点击保存</div>
       <div class="settings-content">
         <p v-if="loading" role="status">正在载入设置…</p>
         <div
@@ -195,82 +240,87 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
         >
           {{ notice }}
         </div>
-        <form v-if="group && !loading" novalidate @submit.prevent="save">
-          <div class="group-heading">
-            <h2>{{ group.title }}</h2>
-            <span class="change-state">{{ dirty ? '有未保存的修改' : '已同步' }}</span>
-          </div>
-          <p class="group-description">{{ group.description }}</p>
-          <div v-if="selected === 'model_config'" class="setup-guide">
-            <strong>连接你的第一个模型</strong>
-            <p>① 填写服务商提供的接口信息　② 开启模型并保存　③ 测试连接，然后返回聊天</p>
-          </div>
-          <p class="apply-notice">
-            {{ group.apply_notice
-            }}<strong v-if="group.restart_required"> 已保存新设置，等待重启服务。</strong>
+        <form v-if="visibleGroups.length && !loading" novalidate @submit.prevent="save">
+          <h2 v-if="selected === SYSTEM_PAGE" class="system-page-title">系统设置</h2>
+          <p v-if="selected === SYSTEM_PAGE" class="system-page-intro">
+            这里的设置会改变服务运行方式，保存后统一重启服务生效。
+            <strong v-if="restartPending">当前有已保存的设置等待重启。</strong>
           </p>
-          <SettingField
-            v-for="field in basicFields"
-            :key="`${selected}-${field.path}`"
-            :field="field"
-            v-model="form[field.path]"
-            :error="errors[field.path]"
-            :disabled="working"
-            :has-api-key="group.has_api_key"
-            :clear-api-key="clearApiKey"
-            @clear-key="clearKey"
-          />
-          <details
-            v-if="advancedFields.length"
-            :open="advanced"
-            class="advanced-settings"
-            @toggle="advanced = $event.target.open"
-          >
-            <summary>高级设置 <span>首次使用通常无需修改</span></summary>
+          <section v-for="item in visibleGroups" :key="item.name" class="settings-group-card">
+            <div class="group-heading">
+              <div>
+                <h2>{{ item.title }}</h2>
+                <span v-if="isGroupDirty(item)" class="change-state unsaved">未保存</span>
+              </div>
+              <button
+                type="button"
+                class="text-button group-default"
+                :disabled="working"
+                @click="defaults(item)"
+              >
+                恢复{{ item.title }}默认值
+              </button>
+            </div>
+            <p class="group-description">{{ item.description }}</p>
+            <div v-if="item.name === 'model_config'" class="setup-guide">
+              <strong>连接你的第一个模型</strong>
+              <p>① 填写服务商提供的接口信息　② 开启模型并保存　③ 测试连接，然后返回聊天</p>
+            </div>
+            <p v-if="selected !== SYSTEM_PAGE" class="apply-notice">{{ item.apply_notice }}</p>
             <SettingField
-              v-for="field in advancedFields"
-              :key="`${selected}-${field.path}`"
+              v-for="field in item.fields"
+              :key="`${item.name}-${field.path}`"
+              v-model="forms[item.name][field.path]"
               :field="field"
-              v-model="form[field.path]"
-              :error="errors[field.path]"
+              :id-prefix="item.name"
+              :error="errors[item.name]?.[field.path]"
               :disabled="working"
+              :has-api-key="item.has_api_key"
+              :clear-api-key="item.name === 'model_config' && clearApiKey"
+              @clear-key="clearKey"
             />
-          </details>
-          <div class="settings-actions">
-            <button type="submit" class="save-settings" :disabled="working || !dirty">
-              {{ saving ? '正在保存…' : '保存设置' }}
-            </button>
+            <div v-if="item.name === 'model_config'" class="connection-test">
+              <button
+                type="button"
+                class="icon-button"
+                :disabled="working || isGroupDirty(item) || !item.values.enabled"
+                @click="testConnection"
+              >
+                {{ testing ? '正在测试…' : '测试已保存的连接' }}
+              </button>
+              <p>
+                {{
+                  isGroupDirty(item)
+                    ? '请先保存修改，再测试最新的模型连接。'
+                    : '测试会发起一次简短模型调用，可能产生少量费用，不会写入聊天记录。'
+                }}
+              </p>
+            </div>
+          </section>
+          <div class="settings-action-dock" aria-label="设置操作">
+            <span class="action-summary">
+              {{
+                dirty
+                  ? `${dirtyGroups.length} 组修改尚未保存`
+                  : restartPending
+                    ? '已保存修改等待重启'
+                    : '设置已同步'
+              }}
+            </span>
             <button type="button" class="icon-button" :disabled="working || !dirty" @click="undo">
               撤销修改
             </button>
-            <button type="button" class="text-button" :disabled="working" @click="defaults">
-              恢复本组默认值
+            <button type="submit" class="save-settings" :disabled="working || !dirty">
+              {{ saving ? '正在保存…' : '保存设置' }}
             </button>
+            <RestartControl
+              v-if="frontendPreferences"
+              :preferences="frontendPreferences"
+              :disabled="saving || testing || dirty"
+              :pending="restartPending"
+              @busy="restarting = $event"
+            />
           </div>
-          <div v-if="selected === 'model_config'" class="connection-test">
-            <button
-              type="button"
-              class="icon-button"
-              :disabled="working || dirty || !group.values.enabled"
-              @click="testConnection"
-            >
-              {{ testing ? '正在测试…' : '测试已保存的连接' }}
-            </button>
-            <p>
-              {{
-                dirty
-                  ? '请先保存修改，再测试最新的模型连接。'
-                  : '测试会发起一次简短模型调用，可能产生少量费用，不会写入聊天记录。'
-              }}
-            </p>
-          </div>
-          <RestartControl
-            v-if="groups.some((item) => item.name === 'frontend_config')"
-            :preferences="groups.find((item) => item.name === 'frontend_config').values"
-            :disabled="saving || testing || dirty"
-            @busy="restarting = $event"
-          />
-          <p v-if="dirty" class="restart-draft-hint">先保存或撤销当前修改，再重启服务。</p>
         </form>
       </div>
     </main>
