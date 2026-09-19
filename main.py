@@ -15,6 +15,7 @@ from anyagent.runtime.bootstrap import create_app
 from anyagent.runtime.frontend import ensure_frontend_build
 from anyagent.runtime.processes import terminate_child_processes
 from anyagent.runtime.restart import RestartController
+from anyagent.runtime.startup import build_startup_display, check_listener_available
 from anyagent.utils.logger import LogManager, logger
 
 
@@ -54,8 +55,13 @@ def run_server(args: argparse.Namespace, parser: argparse.ArgumentParser) -> boo
     )
     LogManager.configure(logging_settings)
     try:
-        ensure_frontend_build()
-        logger.info("Starting AnyAgent on %s:%s", server.host, server.port)
+        frontend_ready = ensure_frontend_build()
+        check_listener_available(server.host, server.port)
+        logger.info(
+            build_startup_display(
+                server.host, server.port, frontend_ready=frontend_ready
+            )
+        )
         http_server.run()
     except KeyboardInterrupt:
         restart.requested = False
