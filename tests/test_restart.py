@@ -79,6 +79,18 @@ def wait_instance(process, port, previous=None):
     raise AssertionError("Replacement server did not become ready")
 
 
+def wait_port_released(port):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", port))
+            return
+        except OSError:
+            time.sleep(0.05)
+    raise AssertionError(f"Server port {port} remained occupied after process exit")
+
+
 @pytest.fixture
 def model_endpoint():
     with open_model_endpoint() as endpoint:
@@ -121,7 +133,10 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(
         command.extend(["--port", str(port)])
     with (tmp_path / "server-output.txt").open("w+") as output:
         process = subprocess.Popen(
-            command, cwd=tmp_path, stdout=output, stderr=subprocess.STDOUT
+            command,
+            cwd=tmp_path,
+            stdout=output,
+            stderr=subprocess.STDOUT,
         )
         try:
             initial = wait_instance(process, port)
@@ -178,16 +193,17 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(
         finally:
             if process.poll() is None:
                 process.send_signal(
-                    signal.SIGINT if os.name != "nt" else signal.SIGTERM
+                    signal.SIGTERM if os.name == "nt" else signal.SIGINT
                 )
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-            if process.returncode != 0:
+            if os.name != "nt" and process.returncode != 0:
                 output.seek(0)
                 pytest.fail(output.read())
+    wait_port_released(effective_port)
 
 
 def test_restart_preflight_retains_service_when_new_port_is_occupied():
