@@ -4,6 +4,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import SettingField from '../components/SettingField.vue'
 import RestartControl from '../components/RestartControl.vue'
 import { request } from '../api.js'
+import { announceFrontendConfig } from '../configSync.js'
 import '../styles/settings.css'
 
 const SYSTEM_PAGE = 'system'
@@ -151,6 +152,7 @@ async function save() {
           }),
         })
         replaceGroup(result)
+        if (result.name === 'frontend_config') announceFrontendConfig(result.revision)
         savedCount++
       } catch (error) {
         failed.value = true
@@ -242,8 +244,8 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
         </div>
         <form v-if="visibleGroups.length && !loading" novalidate @submit.prevent="save">
           <h2 v-if="selected === SYSTEM_PAGE" class="system-page-title">系统设置</h2>
-          <p v-if="selected === SYSTEM_PAGE" class="system-page-intro">
-            这里的设置会改变服务运行方式，保存后统一重启服务生效。
+          <p v-if="selected === SYSTEM_PAGE" class="system-page-intro restart-required-notice">
+            <b>需要重启服务</b>这里的设置会改变服务运行方式，保存后统一重启服务生效。
             <strong v-if="restartPending">当前有已保存的设置等待重启。</strong>
           </p>
           <section v-for="item in visibleGroups" :key="item.name" class="settings-group-card">
@@ -266,7 +268,9 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
               <strong>连接你的第一个模型</strong>
               <p>① 填写服务商提供的接口信息　② 开启模型并保存　③ 测试连接，然后返回聊天</p>
             </div>
-            <p v-if="selected !== SYSTEM_PAGE" class="apply-notice">{{ item.apply_notice }}</p>
+            <p v-if="selected !== SYSTEM_PAGE" class="apply-notice hot-reload-notice">
+              <b>热更新</b>{{ item.apply_notice }}
+            </p>
             <SettingField
               v-for="field in item.fields"
               :key="`${item.name}-${field.path}`"
