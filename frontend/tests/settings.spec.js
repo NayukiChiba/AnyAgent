@@ -23,6 +23,14 @@ test('settings save a model, preserve its key, test the SDK connection and open 
     await page.getByRole('link', { name: '设置', exact: true }).click()
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
+    await expect(page.locator('.settings-sidebar')).toHaveCSS(
+      'background-color',
+      'rgb(242, 245, 249)',
+    )
+    await expect(page.locator('.hot-reload-notice')).toHaveCSS(
+      'background-color',
+      'rgb(255, 248, 231)',
+    )
     await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
     await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
       'placeholder',
@@ -31,6 +39,8 @@ test('settings save a model, preserve its key, test the SDK connection and open 
     await page.getByLabel('流式输出', { exact: true }).uncheck()
     await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
     await expect(page.locator('.settings-action-dock')).toHaveCSS('position', 'fixed')
+    await expect(page.locator('.settings-action-dock')).toHaveCSS('flex-direction', 'column')
+    await expect(page.locator('.settings-main')).toHaveCSS('padding-right', '180px')
     await expect(page.getByRole('button', { name: '测试已保存的连接' })).toBeDisabled()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
@@ -62,6 +72,10 @@ test('all configuration groups render with validation, dirty guards and restart 
   try {
     await page.goto('/settings')
     await page.getByRole('button', { name: '系统设置', exact: true }).click()
+    await expect(page.locator('.restart-required-notice')).toHaveCSS(
+      'background-color',
+      'rgb(255, 240, 240)',
+    )
     for (const name of ['Agent 行为', '会话存储', '日志', '服务'])
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     await expect(page.getByText('高级设置')).toHaveCount(0)
@@ -129,18 +143,28 @@ test('first use configures a disabled model entirely in the web UI', async ({ pa
   }
 })
 
-test('saving webpage preferences updates the next chat view', async ({ page, request }) => {
+test('saving webpage preferences hot reloads an open chat view', async ({
+  page,
+  context,
+  request,
+}) => {
   const original = await savedGroup(request, 'frontend_config')
+  const nextTransport = original.values.default_transport === 'websocket' ? 'http' : 'websocket'
+  const nextLabel = nextTransport === 'http' ? 'HTTP（SSE）' : 'WebSocket'
+  const expectedChatLabel = nextTransport === 'http' ? 'HTTP · SSE' : 'WebSocket'
+  const settingsPage = await context.newPage()
   try {
-    await page.goto('/settings')
-    await page.getByRole('button', { name: '网页偏好', exact: true }).click()
-    await page.getByLabel('默认连接方式').click()
-    await page.getByRole('option', { name: 'HTTP（SSE）', exact: true }).click()
-    await page.getByRole('button', { name: '保存设置', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('设置已保存')
-    await page.getByRole('link', { name: '返回聊天' }).click()
-    await expect(page.getByLabel('连接方式')).toHaveText('HTTP · SSE')
+    await page.goto('/')
+    await settingsPage.goto('/settings')
+    await settingsPage.getByRole('button', { name: '网页偏好', exact: true }).click()
+    await expect(settingsPage.locator('.hot-reload-notice')).toContainText('不需要重启服务')
+    await settingsPage.getByLabel('默认连接方式').click()
+    await settingsPage.getByRole('option', { name: nextLabel, exact: true }).click()
+    await settingsPage.getByRole('button', { name: '保存设置', exact: true }).click()
+    await expect(settingsPage.getByRole('status')).toContainText('设置已保存')
+    await expect(page.getByLabel('连接方式')).toHaveText(expectedChatLabel)
   } finally {
+    await settingsPage.close()
     await restore(request, original)
   }
 })
