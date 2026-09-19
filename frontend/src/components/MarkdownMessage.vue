@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { renderMarkdown } from '../markdown.js'
-import '../markdown.css'
+import '../styles/markdown.css'
 
 const props = defineProps({ content: { type: String, default: '' } })
 const html = computed(() => renderMarkdown(props.content))

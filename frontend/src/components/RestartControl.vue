@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { request } from '../api.js'
-import '../restart.css'
+import '../styles/restart.css'
 const props = defineProps({
   preferences: { type: Object, required: true },
   disabled: Boolean,

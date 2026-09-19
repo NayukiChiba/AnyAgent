@@ -4,7 +4,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import SettingField from '../components/SettingField.vue'
 import RestartControl from '../components/RestartControl.vue'
 import { request } from '../api.js'
-import '../settings.css'
+import '../styles/settings.css'
 
 const SYSTEM_PAGE = 'system'
 const groups = ref([])
