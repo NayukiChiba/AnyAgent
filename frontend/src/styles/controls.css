@@ -150,18 +150,18 @@ textarea {
   gap: 11px;
   padding: 13px;
   margin-bottom: 20px;
-  border: 1px solid #36415a;
+  border: 1px solid #d7dfeb;
   border-radius: 9px;
-  color: #d8e1f3 !important;
+  color: #4c5d78 !important;
   font-size: 13px;
-  background: #202a3d;
+  background: #fff;
 }
 .sidebar-settings:hover {
-  background: #2c3850;
-  border-color: #566987;
+  background: #e7ecf4;
+  border-color: #c7d1e0;
 }
 .sidebar-settings svg {
-  color: #a5b5df;
+  color: #6e83bd;
 }
 .connection-controls .setting-select {
   width: 150px;
