@@ -58,6 +58,9 @@ def test_catalog_covers_every_configuration_field(settings_client):
         }
         assert not public["restart_required"]
         assert paths.get_config_path(name).is_file()
+    frontend = group(settings_client, "frontend_config")
+    assert frontend["apply_mode"] == "hot_reload"
+    assert "不需要重启服务" in frontend["apply_notice"]
 
 
 def test_secret_retention_clear_and_model_hot_reload(settings_client):

@@ -117,11 +117,11 @@ GROUPS = {
         "网页偏好",
         "选择网页打开时的默认连接方式。",
         FrontendSettings,
-        "page_reload",
+        "hot_reload",
         {
             "default_transport": (
                 "默认连接方式",
-                "WebSocket 和 HTTP 都支持聊天；修改后重新打开聊天页面。",
+                "WebSocket 和 HTTP 都支持聊天；保存后已打开的聊天页会自动同步。",
                 False,
             ),
             "restart_poll_interval_ms": (
@@ -216,7 +216,7 @@ GROUPS = {
 CHOICE_LABELS = {"websocket": "WebSocket", "http": "HTTP（SSE）"}
 APPLY_NOTICES = {
     "next_run": "保存后下一次聊天立即生效，正在生成的回复不受影响。",
-    "page_reload": "保存后重新打开聊天页面采用最新网页偏好。",
+    "hot_reload": "保存后立即生效，不需要重启服务或重新打开聊天页面。",
     "restart": "保存后需要重启服务才能生效；当前服务继续使用原设置。",
 }
 
