@@ -8,14 +8,19 @@
 
 ```bash
 uv sync --locked
-cd frontend
-npm ci
-npm run build
-cd ..
 uv run main.py
 ```
 
-前端首次构建后，`main.py` 同时提供 FastAPI、Vue 3 聊天页面和独立设置页面，无需单独启动前端服务。修改前端源码后重新构建即可；构建产物不提交 Git。服务默认监听 `127.0.0.1:8000`，聊天页面位于 <http://127.0.0.1:8000/>，交互式 API 文档位于 <http://127.0.0.1:8000/docs>。可用 `uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
+首次启动时，如果缺少前端构建产物，`main.py` 会自动执行 `npm ci` 和
+`npm run build`。已有 `node_modules` 时只执行构建；Node/npm 不可用或构建失败时，
+后端 API 仍会启动，根页面返回明确的 503 说明。构建产物和 `node_modules` 均不提交
+Git。
+
+`main.py` 同时提供 FastAPI、Vue 3 聊天页面和独立设置页面，无需单独启动前端服务。
+修改前端源码后需在 `frontend/` 手动运行 `npm run build`。服务默认监听
+`127.0.0.1:8000`，聊天页面位于 <http://127.0.0.1:8000/>，交互式 API 文档位于
+<http://127.0.0.1:8000/docs>。可用
+`uv run main.py --host 0.0.0.0 --port 8080` 覆盖本次监听参数。按 `Ctrl+C` 退出。
 
 源码通过根目录 `anyagent/` 模块直接运行；uv 只管理依赖，不安装项目本身或生成 `egg-info`。
 

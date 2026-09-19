@@ -15,9 +15,29 @@ def get_main_path() -> Path:
     return get_project_root() / "main.py"
 
 
+def get_frontend_dir() -> Path:
+    """Return the frontend source directory without creating it."""
+    return get_project_root() / "frontend"
+
+
+def get_frontend_package_path() -> Path:
+    """Return the frontend package manifest path."""
+    return get_frontend_dir() / "package.json"
+
+
+def get_frontend_lock_path() -> Path:
+    """Return the frontend npm lockfile path."""
+    return get_frontend_dir() / "package-lock.json"
+
+
+def get_frontend_node_modules_dir() -> Path:
+    """Return the local frontend dependency directory."""
+    return get_frontend_dir() / "node_modules"
+
+
 def get_frontend_dist_dir() -> Path:
     """Return compiled frontend assets, which are source build artifacts."""
-    return get_project_root() / "frontend" / "dist"
+    return get_frontend_dir() / "dist"
 
 
 def get_frontend_index_path() -> Path:

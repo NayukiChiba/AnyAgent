@@ -12,6 +12,7 @@ from anyagent.configs import (
     paths,
 )
 from anyagent.runtime.bootstrap import create_app
+from anyagent.runtime.frontend import ensure_frontend_build
 from anyagent.runtime.restart import RestartController
 from anyagent.utils.logger import LogManager, logger
 
@@ -53,6 +54,7 @@ def main() -> None:
     )
     LogManager.configure(logging_config)
     try:
+        ensure_frontend_build()
         logger.info("Starting AnyAgent on %s:%s", server.host, server.port)
         http_server.run()
     except KeyboardInterrupt:
