@@ -99,15 +99,24 @@ npm run preview
 DOCS_BASE=/AnyAgent/ npm run build
 ```
 
-## 自动构建
+Windows 的 Git Bash 会把 `/AnyAgent/` 当路径转换成 `D:/Git/AnyAgent/`，需禁用转换：
+
+```bash
+MSYS_NO_PATHCONV=1 DOCS_BASE=/AnyAgent/ npm run build
+```
+
+## 自动构建与发布
 
 `.github/workflows/docs.yml` 在 main 分支的文档变更、相关 PR 和手动触发时执行：
 
 1. 准备 Node.js 22，并按 docs 内的锁文件恢复 npm 缓存。
-2. 在 docs 内运行 `npm ci` 和 `npm run build`。
-3. 将静态站点上传为 `docs-site` 构建产物，可在 Actions 运行页面下载。
+2. 在 docs 内运行 `npm ci` 和 `npm run build`，以 `DOCS_BASE=/<仓库名>/` 构建。
+3. 构建产物打包为 Pages artifact，PR 只做构建校验，不产出 artifact。
+4. main 分支的构建由 `deploy` 任务发布到 GitHub Pages：<https://nayukichiba.github.io/AnyAgent/>
 
-工作流只需仓库读取权限。发布到静态托管服务时，可使用构建产物，并按部署位置设置 `DOCS_BASE`。构建与部署方式可参考 [VitePress 官方部署指南](https://vuejs.github.io/vitepress/v1/guide/deploy)。
+发布使用 GitHub Actions 作为 Pages 的构建来源（仓库 Settings → Pages → Source 需设为 "GitHub Actions"），因此 `deploy` 任务需要 `pages: write` 和 `id-token: write` 权限；构建任务只需仓库读取权限。连续推送时 `deploy` 按 `github-pages` 分组串行执行且不取消进行中的发布，避免站点停留在中间状态。
+
+构建与部署方式可参考 [VitePress 官方部署指南](https://vuejs.github.io/vitepress/v1/guide/deploy)。
 
 ## 提交与运行数据
 
