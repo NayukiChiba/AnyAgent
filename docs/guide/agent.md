@@ -72,7 +72,7 @@ Agent 回复支持标题、加粗、斜体、删除线、列表、引用、表�
 }
 ```
 
-`default_transport` 支持 `websocket` 和 `http`，决定页面初始连接方式；`cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。状态接口刷新时重新加载该文件，重新打开页面采用最新默认连接；手动选择的连接不会因刷新状态被重置。
+`default_transport` 支持 `websocket` 和 `http`，决定页面默认连接方式；`cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。网页保存后会通知已打开的聊天页立即同步默认连接；手动修改 JSON 后可点击“刷新配置”重新读取。
 
 ## 使用工作台
 
