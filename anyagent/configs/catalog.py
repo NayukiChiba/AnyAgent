@@ -73,6 +73,11 @@ GROUPS = {
         LangChainSettings,
         "restart",
         {
+            "runner": (
+                "执行引擎",
+                "langchain 使用官方封装；langgraph 使用显式状态图；loop 为无框架的本地循环。",
+                False,
+            ),
             "system_prompt": (
                 "助手指令",
                 "描述希望助手如何回答、何时使用工具。",
@@ -213,7 +218,13 @@ GROUPS = {
     ),
 }
 
-CHOICE_LABELS = {"websocket": "WebSocket", "http": "HTTP（SSE）"}
+CHOICE_LABELS = {
+    "websocket": "WebSocket",
+    "http": "HTTP（SSE）",
+    "langchain": "LangChain（官方封装）",
+    "langgraph": "LangGraph（显式状态图）",
+    "loop": "本地循环（无框架）",
+}
 APPLY_NOTICES = {
     "next_run": "保存后下一次聊天立即生效，正在生成的回复不受影响。",
     "hot_reload": "保存后立即生效，不需要重启服务或重新打开聊天页面。",
