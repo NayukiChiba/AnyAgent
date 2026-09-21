@@ -2,6 +2,7 @@
 
 import json
 import stat
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -79,8 +80,10 @@ def test_secret_retention_clear_and_model_hot_reload(settings_client):
     path.chmod(0o600)
     result = save(client, "model_config", {"api_key": "", "streaming": False})
     assert result.status_code == 200
-    assert json.loads(path.read_text())["api_key"] == "super-secret"
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert json.loads(path.read_text(encoding="utf-8"))["api_key"] == "super-secret"
+    if sys.platform != "win32":
+        # POSIX 权限位在 Windows 上无意义，跳过断言
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert client.get("/api/v1/agent").json()["streaming"] is False
     original = path.read_bytes()
     rejected = save(client, "model_config", {}, clear_api_key=True)
@@ -90,7 +93,7 @@ def test_secret_retention_clear_and_model_hot_reload(settings_client):
     result = save(client, "model_config", {"enabled": False}, clear_api_key=True)
     assert result.status_code == 200
     assert not result.json()["has_api_key"]
-    assert json.loads(path.read_text())["api_key"] == ""
+    assert json.loads(path.read_text(encoding="utf-8"))["api_key"] == ""
 
 
 @pytest.mark.parametrize(

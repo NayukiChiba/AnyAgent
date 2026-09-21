@@ -1,9 +1,9 @@
 """OpenAI-compatible model client implementation."""
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 
 from anyagent.configs.agent import ModelSettings
-from anyagent.core.domain.chat import Message
+from anyagent.core.domain.chat import ChatError, Message
 from anyagent.core.ports.model import ChatChunk, ChatResult
 from anyagent.tools import ToolSet
 
@@ -94,12 +94,30 @@ class OpenAIClient:
         )
 
     async def test(self) -> None:
-        """Connectivity check: one minimal non-streaming call."""
-        await self._client.chat.completions.create(
-            model=self._settings.model,
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=1,
-        )
+        """Connectivity check: one configured call and one streaming call.
+
+        The first call uses the saved streaming flag so the probe reflects
+        the actual configuration. The second is always streaming to verify
+        the endpoint supports it regardless of the saved setting.
+        """
+        try:
+            await self._client.chat.completions.create(
+                model=self._settings.model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                stream=self._settings.streaming,
+            )
+            async for _ in await self._client.chat.completions.create(
+                model=self._settings.model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                stream=True,
+            ):
+                pass
+        except OpenAIError as exc:
+            raise ChatError(
+                "model_unavailable", "模型连接失败，请检查配置和网络"
+            ) from exc
 
     async def aclose(self) -> None:
         await self._client.close()

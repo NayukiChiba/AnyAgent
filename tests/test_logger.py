@@ -48,7 +48,7 @@ def test_reconfiguration_does_not_duplicate_records(log_settings):
     logger.info("Second record")
     LogManager.shutdown()
 
-    content = log_settings.file_path.read_text()
+    content = log_settings.file_path.read_text(encoding="utf-8")
     assert content.count("First record") == 1
     assert content.count("Second record") == 1
 
@@ -62,7 +62,7 @@ def test_log_rotation_limits_retained_files(log_settings):
 
     files = list(settings.file_path.parent.glob("test.log*"))
     assert len(files) == 3
-    assert "Record 19:" in settings.file_path.read_text()
+    assert "Record 19:" in settings.file_path.read_text(encoding="utf-8")
 
 
 def test_log_level_and_other_handlers_are_preserved(log_settings):
@@ -80,7 +80,7 @@ def test_log_level_and_other_handlers_are_preserved(log_settings):
     finally:
         root.removeHandler(other_handler)
 
-    content = log_settings.file_path.read_text()
+    content = log_settings.file_path.read_text(encoding="utf-8")
     assert "Filtered debug record" not in content
     assert "Visible info record" in content
 
@@ -108,7 +108,7 @@ def test_database_debug_logs_do_not_include_chat_content(log_settings):
     logging.getLogger("sqlalchemy.engine.Engine").info("SQL parameters: %s", marker)
     logging.getLogger("aiosqlite").warning("Visible database warning")
     LogManager.shutdown()
-    content = settings.file_path.read_text()
+    content = settings.file_path.read_text(encoding="utf-8")
     assert marker not in content
     assert "Visible application debug" in content
     assert "Visible database warning" in content
@@ -141,7 +141,7 @@ def test_project_logs_exclude_dependency_chatter_and_keep_failures(log_settings,
         finally:
             dependency.setLevel(previous)
     LogManager.shutdown()
-    content = settings.file_path.read_text()
+    content = settings.file_path.read_text(encoding="utf-8")
     assert "Project lifecycle info" in content
     assert "Project agent info" in content
     assert ("Project execution debug" in content) == (level == "DEBUG")
@@ -164,7 +164,7 @@ def test_dependency_threshold_is_configurable_and_database_parameters_stay_priva
         logging.getLogger(name).info("Private HTTP request info")
     logging.getLogger("sqlalchemy.engine.Engine").info("Private query parameter")
     LogManager.shutdown()
-    content = settings.file_path.read_text()
+    content = settings.file_path.read_text(encoding="utf-8")
     assert "Explicit dependency debug" in content
     assert "Private" not in content
 
@@ -225,7 +225,7 @@ def test_business_payloads_are_logged_fully_with_nested_credentials_redacted(
     LogManager.configure(log_settings)
     logger.info("Business payload: %s", payload)
     LogManager.shutdown()
-    content = log_settings.file_path.read_text()
+    content = log_settings.file_path.read_text(encoding="utf-8")
     assert "普通工具参数" in content and "普通工具结果" in content
     assert "第一行\\n第二行" in content
     assert len(content.splitlines()) == 1
@@ -245,6 +245,6 @@ def test_unserializable_payload_does_not_interrupt_logging(log_settings):
     logger.info("Unsupported payload: %s", payload)
     logger.info("Execution continues")
     LogManager.shutdown()
-    content = log_settings.file_path.read_text()
+    content = log_settings.file_path.read_text(encoding="utf-8")
     assert "[UNSERIALIZABLE PAYLOAD]" in content
     assert "Execution continues" in content

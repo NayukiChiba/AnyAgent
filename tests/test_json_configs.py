@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 from pydantic import Field
@@ -149,6 +150,10 @@ def test_runtime_paths_reject_escape(config_dir, resolver, absolute):
     assert not config_dir.exists()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="symlink creation requires elevated privileges on Windows",
+)
 def test_config_symlink_cannot_modify_file_outside_configs(config_dir):
     outside = paths.PROJECT_ROOT / "outside.json"
     outside.write_text('{"keep":true}')
@@ -162,6 +167,10 @@ def test_config_symlink_cannot_modify_file_outside_configs(config_dir):
     assert not list(config_dir.glob("*.bak"))
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="symlink creation requires elevated privileges on Windows",
+)
 def test_log_symlink_cannot_leave_logs_directory(config_dir):
     outside = paths.DATA_DIR / "outside.log"
     paths.get_logs_dir().mkdir(parents=True)
@@ -261,7 +270,9 @@ def test_optional_defaults_are_written_without_overwriting_values(config_dir):
         **original,
         "nested": {"enabled": True, "limit": 10},
     }
-    assert file.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":
+        # POSIX 权限位在 Windows 上无意义，跳过断言
+        assert file.stat().st_mode & 0o777 == 0o600
     assert not list(config_dir.glob("*.bak"))
     assert not list(config_dir.glob(".*.tmp"))
     unchanged = file.read_bytes()

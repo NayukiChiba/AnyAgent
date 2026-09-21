@@ -132,7 +132,9 @@ def test_streaming_switch_hot_reload_preserves_credentials(
             assert (
                 any(event["type"] == "delta" for event in result["events"]) is streaming
             )
-            stored = json.loads(paths.get_config_path("model_config").read_text())
+            stored = json.loads(
+                paths.get_config_path("model_config").read_text(encoding="utf-8")
+            )
             assert stored["api_key"] == "fixture-secret"
             assert stored["streaming"] is streaming
     calls = model_endpoint[1]
@@ -196,7 +198,7 @@ def test_real_sdk_logs_model_replies_and_tool_execution(configured_app, streamin
             assert response.status_code == 200, response.text
     finally:
         LogManager.shutdown()
-    records = log_path.read_text()
+    records = log_path.read_text(encoding="utf-8")
     assert "计算 2+3" in records
     assert "Agent tool call:" in records and '"name": "calculate"' in records
     assert '"operation": "add"' in records
