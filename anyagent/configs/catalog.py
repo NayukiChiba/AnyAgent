@@ -75,8 +75,13 @@ GROUPS = {
         {
             "runner": (
                 "执行引擎",
-                "langchain 使用官方封装；langgraph 使用显式状态图；loop 为无框架的本地循环。",
+                "langchain 使用官方封装；langgraph 使用显式状态图；loop 为无框架的本地循环；dify/coze/deerflow 连接远端 Agent 平台，pi 为纯对话引擎。远端平台复用模型连接中的接口地址与密钥，模型名称可任意填写。",
                 False,
+            ),
+            "coze_bot_id": (
+                "Coze Bot ID",
+                "仅执行引擎为 coze 时需要填写，在 Coze 平台的 Bot 页面获取。",
+                True,
             ),
             "system_prompt": (
                 "助手指令",
@@ -224,6 +229,10 @@ CHOICE_LABELS = {
     "langchain": "LangChain（官方封装）",
     "langgraph": "LangGraph（显式状态图）",
     "loop": "本地循环（无框架）",
+    "dify": "Dify（远端平台）",
+    "coze": "Coze（远端平台）",
+    "pi": "Pi（纯对话引擎）",
+    "deerflow": "DeerFlow（远端平台）",
 }
 APPLY_NOTICES = {
     "next_run": "保存后下一次聊天立即生效，正在生成的回复不受影响。",

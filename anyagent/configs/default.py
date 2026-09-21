@@ -39,6 +39,7 @@ DEFAULT_MODEL_CONFIG = {
 }
 DEFAULT_LANGCHAIN_CONFIG = {
     "runner": "langchain",
+    "coze_bot_id": "",
     "system_prompt": "You are a helpful assistant. Use the calculate tool for arithmetic.",
     "max_steps": 12,
     "max_sessions": 64,
