@@ -5,8 +5,13 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
+from anyagent.adapters.runners.coze.runner import CozeRunnerFactory
+from anyagent.adapters.runners.deerflow.runner import DeerFlowRunnerFactory
+from anyagent.adapters.runners.dify.runner import DifyRunnerFactory
 from anyagent.adapters.runners.langchain.runner import LangChainRunnerFactory
 from anyagent.adapters.runners.langgraph.runner import LangGraphRunnerFactory
+from anyagent.adapters.runners.loop.runner import LoopRunnerFactory
+from anyagent.adapters.runners.pi.runner import PiRunnerFactory
 from anyagent.api.app import build_app
 from anyagent.api.frontend import install_frontend
 from anyagent.configs import (
@@ -21,6 +26,7 @@ from anyagent.configs.agent import LangChainSettings
 from anyagent.configs.management import ConfigurationManager
 from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import RunnerFactory
+from anyagent.core.ports.model import ChatClient
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.openai.client import OpenAIClient
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
@@ -31,14 +37,42 @@ from anyagent.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _openai_client_loader() -> ChatClient:
+    """每次调用重读模型连接配置并创建客户端，支撑连接热更新。"""
+    connection = load_model_config()
+    if not connection.enabled:
+        raise ChatError(
+            "model_not_configured",
+            "请在 data/configs/model_config.json 配置并启用模型",
+        )
+    return OpenAIClient(connection)
+
+
 def _build_factory(
     settings: LangChainSettings,
     tool_set,
 ) -> RunnerFactory:
     """按配置的 runner 名称装配对应 factory。"""
-    if settings.runner == "langgraph":
-        return LangGraphRunnerFactory(settings, tool_set)
-    return LangChainRunnerFactory(settings, tool_set)
+    match settings.runner:
+        case "langgraph":
+            return LangGraphRunnerFactory(settings, tool_set)
+        case "loop":
+            return LoopRunnerFactory(
+                _openai_client_loader,
+                tool_set,
+                system_prompt=settings.system_prompt,
+                max_steps=settings.max_steps,
+            )
+        case "dify":
+            return DifyRunnerFactory()
+        case "coze":
+            return CozeRunnerFactory(settings.coze_bot_id)
+        case "pi":
+            return PiRunnerFactory(_openai_client_loader)
+        case "deerflow":
+            return DeerFlowRunnerFactory()
+        case _:
+            return LangChainRunnerFactory(settings, tool_set)
 
 
 def create_app(
