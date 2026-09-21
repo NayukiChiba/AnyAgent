@@ -38,6 +38,7 @@ DEFAULT_MODEL_CONFIG = {
     "stream_usage": False,
 }
 DEFAULT_LANGCHAIN_CONFIG = {
+    "runner": "langchain",
     "system_prompt": "You are a helpful assistant. Use the calculate tool for arithmetic.",
     "max_steps": 12,
     "max_sessions": 64,

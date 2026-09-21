@@ -56,6 +56,10 @@ class ModelSettings(BaseSettings):
 
 
 class LangChainSettings(BaseSettings):
+    runner: str = Field(
+        default=DEFAULT_LANGCHAIN_CONFIG["runner"],
+        pattern="^(langchain|langgraph|loop)$",
+    )
     system_prompt: str = DEFAULT_LANGCHAIN_CONFIG["system_prompt"]
     max_steps: int = Field(
         default=DEFAULT_LANGCHAIN_CONFIG["max_steps"], ge=2, le=100, strict=True
