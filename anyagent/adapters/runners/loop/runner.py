@@ -3,7 +3,7 @@
 Drives its own tool loop using only ChatClient, ToolSet and Message.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
 from anyagent.core.domain.chat import Event, Message, ToolCall
 from anyagent.core.ports.model import ChatChunk, ChatClient, ChatResult
@@ -115,24 +115,28 @@ class LoopRunner:
 
 
 class LoopRunnerFactory:
-    """Creates LoopRunner instances from injected dependencies."""
+    """Creates LoopRunner instances from injected dependencies.
+
+    client_loader is invoked per create() so model connection
+    changes apply to the next run without a restart.
+    """
 
     def __init__(
         self,
-        client: ChatClient,
+        client_loader: Callable[[], ChatClient],
         tool_set: ToolSet,
         *,
         system_prompt: str = "",
         max_steps: int = 10,
     ):
-        self._client = client
+        self._client_loader = client_loader
         self._tool_set = tool_set
         self._system_prompt = system_prompt
         self._max_steps = max_steps
 
     async def create(self) -> LoopRunner:
         return LoopRunner(
-            self._client,
+            self._client_loader(),
             self._tool_set,
             system_prompt=self._system_prompt,
             max_steps=self._max_steps,

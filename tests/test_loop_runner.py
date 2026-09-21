@@ -63,7 +63,7 @@ def test_loop_runner_factory_creates_runner() -> None:
             settings = _make_settings(base_url)
             client = OpenAIClient(settings)
             tool_set = build_tool_set()
-            factory = LoopRunnerFactory(client, tool_set)
+            factory = LoopRunnerFactory(lambda: client, tool_set)
             runner = await factory.create()
             assert isinstance(runner, LoopRunner)
 
