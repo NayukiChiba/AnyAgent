@@ -1,46 +1,22 @@
 """Normalize a real LangChain agent graph into platform execution events."""
 
-import math
 from collections.abc import AsyncIterator, Callable
 from contextlib import aclosing
-from typing import Literal
 
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
 
+from anyagent.adapters.runners.langchain.tooling import to_langchain_tools
 from anyagent.configs import load_model_config
 from anyagent.configs.agent import LangChainSettings, ModelSettings
 from anyagent.core.domain.chat import ChatError, Event, Message
+from anyagent.tools import ToolSet
 from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-@tool
-def calculate(
-    operation: Literal["add", "subtract", "multiply", "divide"], a: float, b: float
-) -> str:
-    """Calculate one arithmetic operation on two finite numbers."""
-    if not math.isfinite(a) or not math.isfinite(b):
-        return "Error: operands must be finite numbers."
-    match operation:
-        case "add":
-            result = a + b
-        case "subtract":
-            result = a - b
-        case "multiply":
-            result = a * b
-        case "divide":
-            if b == 0:
-                return "Error: division by zero."
-            result = a / b
-        case _:
-            return "Error: unsupported operation."
-    return str(result) if math.isfinite(result) else "Error: result is not finite."
 
 
 def text_content(content: str | list) -> str:
@@ -59,12 +35,15 @@ class LangChainRunner:
         self,
         model: BaseChatModel,
         settings: LangChainSettings,
+        tool_set: ToolSet,
         *,
         streaming: bool,
         clients: tuple = (),
     ):
         self.agent = create_agent(
-            model, tools=[calculate], system_prompt=settings.system_prompt
+            model,
+            tools=to_langchain_tools(tool_set),
+            system_prompt=settings.system_prompt,
         )
         self.max_steps = settings.max_steps
         self.clients = clients
@@ -140,10 +119,12 @@ class LangChainRunnerFactory:
     def __init__(
         self,
         settings: LangChainSettings,
+        tool_set: ToolSet,
         *,
         model_loader: Callable[[], ModelSettings] = load_model_config,
     ):
         self.settings = settings
+        self.tool_set = tool_set
         self.model_loader = model_loader
 
     async def create(self) -> LangChainRunner:
@@ -174,6 +155,7 @@ class LangChainRunnerFactory:
             return LangChainRunner(
                 model,
                 self.settings,
+                self.tool_set,
                 streaming=connection.streaming,
                 clients=(async_client, sync_client),
             )

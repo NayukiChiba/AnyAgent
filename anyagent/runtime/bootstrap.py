@@ -24,6 +24,7 @@ from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.memory.sessions import MemorySessionRepository
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.runtime.restart import RestartController
+from anyagent.tools import build_tool_set
 from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,7 +45,8 @@ def create_app(
         load_model_config()
         load_frontend_config()
         app.state.configuration_manager = ConfigurationManager()
-        factory = runner_factory or LangChainRunnerFactory(settings)
+        tool_set = build_tool_set()
+        factory = runner_factory or LangChainRunnerFactory(settings, tool_set)
         database = load_database_config()
         repository = SQLiteSessionRepository(
             database.file_path,
@@ -115,7 +117,7 @@ def create_app(
                     "frontend": load_frontend_config().model_dump(),
                     "storage": "sqlite",
                     "transports": ["http", "websocket", "sse"],
-                    "tools": ["calculate"],
+                    "tools": [t.name for t in tool_set.tools],
                 }
 
             app.state.agent_info = agent_info
