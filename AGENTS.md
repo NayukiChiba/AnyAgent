@@ -83,7 +83,7 @@ feat(config): 从 JSON 加载运行配置
 - 配置类型使用独立默认值和校验模型，新增扩展配置不集中写入主配置；配置缺失时只创建该类型默认 JSON，内容无法加载时先在 `data/configs/` 备份原文件再恢复该类型默认值，文件系统权限错误不得作为格式错误覆盖处理。
 - 平台管理的配置、密钥和运行数据统一保存到根目录 `data/`，不纳入版本控制。
 - `plans/` 是本地临时规划目录，不提交 Git，由用户自行上传到 GitHub Issue。
-- 源码注释和日志使用英文，复杂公开接口采用 Google 风格 docstring。
+- 源码注释和日志使用中文，复杂公开接口采用 Google 风格 docstring（Summary 用中文，Args/Returns 字段名保留英文）。
 
 - 日志 INFO 记录项目生命周期、用户输入、完整模型最终回复、工具名称/调用标识/参数/结果及执行结果；这些业务内容默认进入控制台和 data/logs，不得以依赖降噪为由屏蔽。DEBUG 补充模型各轮响应（含工具请求）、执行阶段、耗时和数量；不逐 token 重复记录。依赖日志默认至少 WARNING，由 logging_config 的 third_party_level 配置；数据库与模型 HTTP 客户端的 DEBUG/INFO 始终过滤，main.py 关闭 HTTP 访问日志。
 - 业务日志通过 AnyAgentLogger 将结构化参数序列化为保留 Unicode 的单行 JSON，换行转义，完整记录普通文本；嵌套及 JSON 字符串中的 api_key、Authorization、password、access_token 等明确认证字段脱敏，不修改原始对象。禁止传入连接配置、实际模型 API Key、认证请求头或整个 SDK HTTP 响应/异常正文；格式不明确的自由文本不能靠字段名脱敏自动识别所有密钥，调用方须避免将凭据混入文本。模型输出与历史提交分别记录，输出日志不代表保存成功；失败/取消仍保留已发生的工具日志。
