@@ -1,8 +1,9 @@
 """Model client contract for self-driving runners."""
 
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from anyagent.core.domain.chat import Message
 from anyagent.tools import ToolSet
@@ -24,9 +25,22 @@ class ChatResult:
     """
 
     content: str
-    tool_calls: tuple = ()
+    tool_calls: tuple[dict[str, Any], ...] = ()
     input_tokens: int = 0
     output_tokens: int = 0
+
+    def parsed_tool_calls(self) -> tuple[dict[str, Any], ...]:
+        """Return tool calls with arguments parsed from JSON string to dict."""
+        result = []
+        for tc in self.tool_calls:
+            args = tc.get("arguments", "{}")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {}
+            result.append({**tc, "arguments": args})
+        return tuple(result)
 
 
 class ChatClient(Protocol):
