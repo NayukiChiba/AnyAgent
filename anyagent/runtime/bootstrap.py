@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import AsyncExitStack, aclosing, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -21,7 +21,7 @@ from anyagent.configs.management import ConfigurationManager
 from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import RunnerFactory
 from anyagent.core.services.chat import ChatService
-from anyagent.infrastructure.memory.sessions import MemorySessionRepository
+from anyagent.infrastructure.openai.client import OpenAIClient
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.runtime.restart import RestartController
 from anyagent.tools import build_tool_set
@@ -75,18 +75,6 @@ def create_app(
                 cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
             )
 
-            # Connection probes use an isolated repository and the normal bounded lifecycle.
-            probe = ChatService(
-                MemorySessionRepository(max_sessions=1),
-                factory,
-                timeout_seconds=settings.run_timeout_seconds,
-                max_history_messages=settings.max_history_messages,
-                max_concurrent_runs=1,
-                max_input_chars=settings.max_input_chars,
-                max_output_chars=settings.max_output_chars,
-                max_event_chars=settings.max_event_chars,
-                cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
-            )
             probe_lock = asyncio.Lock()
 
             async def test_model() -> None:
@@ -95,13 +83,17 @@ def create_app(
                         "probe_busy", "已有模型连接测试正在进行，请稍后重试"
                     )
                 async with probe_lock:
-                    session = await probe.create_session()
+                    connection = load_model_config()
+                    if not connection.enabled:
+                        raise ChatError(
+                            "model_not_configured",
+                            "请在 data/configs/model_config.json 配置并启用模型",
+                        )
+                    client = OpenAIClient(connection)
                     try:
-                        async with aclosing(probe.stream(session.id, "?")) as events:
-                            async for _ in events:
-                                pass
+                        await client.test()
                     finally:
-                        await probe.delete_session(session.id)
+                        await client.aclose()
 
             app.state.test_model = test_model
 
@@ -127,7 +119,6 @@ def create_app(
                 yield
             finally:
                 app.state.ready = False
-                await probe.shutdown()
                 await app.state.chat_service.shutdown()
                 logger.info("Application shutdown complete")
 

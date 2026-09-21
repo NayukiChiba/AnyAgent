@@ -6,9 +6,8 @@ from contextlib import aclosing
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_openai import ChatOpenAI
-from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
 
+from anyagent.adapters.runners.langchain.model import build_chat_model
 from anyagent.adapters.runners.langchain.tooling import to_langchain_tools
 from anyagent.configs import load_model_config
 from anyagent.configs.agent import LangChainSettings, ModelSettings
@@ -135,23 +134,8 @@ class LangChainRunnerFactory:
                 "model_not_configured",
                 "请在 data/configs/model_config.json 配置并启用模型",
             )
-        sync_client = DefaultHttpxClient()
-        async_client = DefaultAsyncHttpxClient()
+        model, async_client, sync_client = build_chat_model(connection)
         try:
-            model = ChatOpenAI(
-                model=connection.model,
-                base_url=connection.base_url,
-                api_key=connection.api_key.get_secret_value(),
-                temperature=connection.temperature,
-                timeout=connection.timeout_seconds,
-                max_retries=connection.max_retries,
-                streaming=connection.streaming,
-                disable_streaming=not connection.streaming,
-                stream_usage=connection.stream_usage,
-                use_responses_api=False,
-                http_client=sync_client,
-                http_async_client=async_client,
-            )
             return LangChainRunner(
                 model,
                 self.settings,
