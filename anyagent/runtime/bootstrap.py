@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 
 from anyagent.adapters.runners.langchain.runner import LangChainRunnerFactory
+from anyagent.adapters.runners.langgraph.runner import LangGraphRunnerFactory
 from anyagent.api.app import build_app
 from anyagent.api.frontend import install_frontend
 from anyagent.configs import (
@@ -30,6 +31,16 @@ from anyagent.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _build_factory(
+    settings: LangChainSettings,
+    tool_set,
+) -> RunnerFactory:
+    """按配置的 runner 名称装配对应 factory。"""
+    if settings.runner == "langgraph":
+        return LangGraphRunnerFactory(settings, tool_set)
+    return LangChainRunnerFactory(settings, tool_set)
+
+
 def create_app(
     *,
     runner_factory: RunnerFactory | None = None,
@@ -46,7 +57,7 @@ def create_app(
         load_frontend_config()
         app.state.configuration_manager = ConfigurationManager()
         tool_set = build_tool_set()
-        factory = runner_factory or LangChainRunnerFactory(settings, tool_set)
+        factory = runner_factory or _build_factory(settings, tool_set)
         database = load_database_config()
         repository = SQLiteSessionRepository(
             database.file_path,
@@ -100,7 +111,7 @@ def create_app(
             def agent_info() -> dict:
                 connection = load_model_config()
                 return {
-                    "runner": "langchain",
+                    "runner": settings.runner,
                     "configured": connection.enabled,
                     "model": connection.model,
                     "base_url": connection.base_url,
