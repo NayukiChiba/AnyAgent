@@ -11,6 +11,7 @@ from anyagent.api.routes.chat import router as chat_router
 from anyagent.api.routes.health import router as health_router
 from anyagent.api.routes.observability import router as observability_router
 from anyagent.api.routes.openai_compat import router as openai_router
+from anyagent.api.routes.profiles import router as profiles_router
 from anyagent.api.routes.settings import router as settings_router
 from anyagent.api.routes.system import router as system_router
 
@@ -32,4 +33,5 @@ def build_app(
     app.include_router(capabilities_router)
     app.include_router(observability_router)
     app.include_router(openai_router)
+    app.include_router(profiles_router)
     return app
