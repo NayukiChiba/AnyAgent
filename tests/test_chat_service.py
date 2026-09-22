@@ -3,7 +3,7 @@ from contextlib import aclosing
 
 import pytest
 
-from anyagent.core.domain.chat import ChatError, Event
+from anyagent.core.domain.chat import ChatError, Event, Message
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.memory.sessions import MemorySessionRepository
 
@@ -274,3 +274,111 @@ def test_tool_logs_include_parameters_results_and_survive_failed_runs(
     if responses:
         assert '"content": "结果是 5"' in responses[0]
     assert "secret upstream credential" not in caplog.text
+
+
+def test_rename_session_validates_and_persists_title():
+    async def check():
+        repository = MemorySessionRepository()
+        service = configured_service(repository, Factory())
+        session = await service.create_session()
+        updated = await service.rename_session(session.id, "  新标题  ")
+        assert updated.title == "新标题"
+        assert (await repository.get(session.id)).title == "新标题"
+        for bad in ["", "   ", "x" * 61]:
+            with pytest.raises(ChatError) as invalid:
+                await service.rename_session(session.id, bad)
+            assert invalid.value.code == "invalid_message"
+        with pytest.raises(ChatError) as missing:
+            await service.rename_session("missing", "标题")
+        assert missing.value.code == "session_not_found"
+
+    asyncio.run(check())
+
+
+def test_cancel_stops_active_run_and_rejects_idle_session():
+    async def check():
+        repository = MemorySessionRepository()
+        factory = Factory()
+        factory.next = Runner(gate=asyncio.Event())
+        service = configured_service(repository, factory)
+        session = await service.create_session()
+        with pytest.raises(ChatError) as idle:
+            service.cancel(session.id)
+        assert idle.value.code == "session_not_running"
+        task = asyncio.create_task(collect(service, session.id))
+        await asyncio.sleep(0)
+        service.cancel(session.id)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert factory.next.closed
+        assert (await repository.get(session.id)).messages == ()
+        assert service.stats["runs_cancelled"] == 1
+
+    asyncio.run(check())
+
+
+def test_stats_track_run_lifecycle():
+    async def check():
+        repository = MemorySessionRepository()
+        factory = Factory()
+        service = configured_service(repository, factory)
+        session = await service.create_session()
+        assert service.stats["active_runs"] == 0
+        await collect(service, session.id)
+        stats = service.stats
+        assert stats["runs_started"] == 1
+        assert stats["runs_completed"] == 1
+        assert stats["runs_failed"] == 0
+        factory.next = Runner(fail=True)
+        with pytest.raises(ChatError):
+            await collect(service, session.id)
+        assert service.stats["runs_failed"] == 1
+        factory.next = Runner(gate=asyncio.Event())
+        task = asyncio.create_task(collect(service, session.id))
+        await asyncio.sleep(0)
+        service.cancel(session.id)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        stats = service.stats
+        assert stats["runs_cancelled"] == 1
+        assert stats["runs_started"] == 3
+        assert stats["active_runs"] == 0
+
+    asyncio.run(check())
+
+
+def test_run_stateless_executes_without_persistence():
+    async def check():
+        repository = MemorySessionRepository()
+        factory = Factory()
+        service = configured_service(repository, factory)
+        messages = (Message("system", "助手"), Message("user", "你好"))
+        events = []
+        async with aclosing(service.run_stateless(messages)) as stream:
+            async for event in stream:
+                events.append(event)
+        assert events[-1].type == "result"
+        assert events[-1].data["content"] == "回复"
+        # 无会话模式不写入存储
+        assert await repository.list() == ()
+        # runner 收到的历史原样透传
+        assert [message.content for message in factory.next.seen] == ["助手", "你好"]
+
+    asyncio.run(check())
+
+
+def test_run_stateless_validates_message_sequence():
+    async def check():
+        service = configured_service(MemorySessionRepository(), Factory())
+        bad_sequences = [
+            (),
+            (Message("user", "你好"), Message("assistant", "回复")),
+            (Message("user", "x" * 9000),),
+        ]
+        for bad in bad_sequences:
+            with pytest.raises(ChatError) as invalid:
+                async for _ in service.run_stateless(bad):
+                    pass
+            assert invalid.value.code == "invalid_message"
+
+    asyncio.run(check())
