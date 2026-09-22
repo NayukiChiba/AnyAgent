@@ -88,3 +88,36 @@ def test_runners_listing(runtime_paths):
             assert runner["kind"] in ("local", "remote")
             assert isinstance(runner["tools"], bool)
             assert runner["label"] and runner["description"]
+
+
+def test_stats_via_api(runtime_paths):
+    with TestClient(create_app(runner_factory=Factory())) as client:
+        session = client.post("/api/v1/sessions").json()
+        url = f"/api/v1/sessions/{session['id']}/messages"
+        assert client.post(url, json={"content": "你好"}).status_code == 200
+        stats = client.get("/api/v1/stats").json()
+        assert stats["runs_started"] == 1
+        assert stats["runs_completed"] == 1
+        assert stats["runs_failed"] == 0
+        assert stats["active_runs"] == 0
+        assert stats["sessions"] == 1
+        assert stats["runner"] == "langchain"
+
+
+def test_logs_tail_via_api(runtime_paths):
+    log_path = load_logging_config().file_path
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(
+        "\n".join(f"line-{index}" for index in range(10)), encoding="utf-8"
+    )
+    with TestClient(create_app(runner_factory=Factory())) as client:
+        response = client.get("/api/v1/logs/tail?lines=3")
+        assert response.status_code == 200
+        assert response.json()["lines"] == ["line-7", "line-8", "line-9"]
+        assert client.get("/api/v1/logs/tail?lines=0").status_code == 422
+        assert client.get("/api/v1/logs/tail?lines=1001").status_code == 422
+
+
+def test_logs_tail_missing_file_returns_empty(runtime_paths):
+    with TestClient(create_app(runner_factory=Factory())) as client:
+        assert client.get("/api/v1/logs/tail").json()["lines"] == []
