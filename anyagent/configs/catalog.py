@@ -234,6 +234,44 @@ CHOICE_LABELS = {
     "pi": "Pi（纯对话引擎）",
     "deerflow": "DeerFlow（远端平台）",
 }
+# 执行引擎元数据：kind 区分本地编排与远端平台；tools 表示是否使用本地工具集
+RUNNER_INFO = {
+    "langchain": {
+        "kind": "local",
+        "tools": True,
+        "description": "LangChain 官方封装，本地编排，支持本地工具",
+    },
+    "langgraph": {
+        "kind": "local",
+        "tools": True,
+        "description": "显式状态图编排，本地执行，支持本地工具",
+    },
+    "loop": {
+        "kind": "local",
+        "tools": True,
+        "description": "无框架的本地自驱动循环，支持本地工具",
+    },
+    "dify": {
+        "kind": "remote",
+        "tools": False,
+        "description": "Dify 平台，工具与编排由平台侧管理",
+    },
+    "coze": {
+        "kind": "remote",
+        "tools": False,
+        "description": "Coze 平台，需要额外配置 Bot ID",
+    },
+    "pi": {
+        "kind": "remote",
+        "tools": False,
+        "description": "Pi 纯对话引擎，不支持工具调用",
+    },
+    "deerflow": {
+        "kind": "remote",
+        "tools": False,
+        "description": "DeerFlow 深度研究框架，经 Gateway 接入",
+    },
+}
 APPLY_NOTICES = {
     "next_run": "保存后下一次聊天立即生效，正在生成的回复不受影响。",
     "hot_reload": "保存后立即生效，不需要重启服务或重新打开聊天页面。",

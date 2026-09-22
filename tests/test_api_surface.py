@@ -58,3 +58,33 @@ def test_session_cancel_via_api(runtime_paths):
         assert stats["runs_cancelled"] == 1
         # 取消后历史不提交
         assert client.get(url).json()["messages"] == []
+
+
+def test_tools_listing(runtime_paths):
+    with TestClient(create_app(runner_factory=Factory())) as client:
+        tools = client.get("/api/v1/tools").json()
+        names = [tool["name"] for tool in tools]
+        assert "calculate" in names
+        calculate = next(tool for tool in tools if tool["name"] == "calculate")
+        assert calculate["description"]
+        assert calculate["parameters"]["type"] == "object"
+
+
+def test_runners_listing(runtime_paths):
+    with TestClient(create_app(runner_factory=Factory())) as client:
+        data = client.get("/api/v1/runners").json()
+        assert data["current"] == "langchain"
+        ids = [runner["id"] for runner in data["runners"]]
+        assert ids == [
+            "langchain",
+            "langgraph",
+            "loop",
+            "dify",
+            "coze",
+            "pi",
+            "deerflow",
+        ]
+        for runner in data["runners"]:
+            assert runner["kind"] in ("local", "remote")
+            assert isinstance(runner["tools"], bool)
+            assert runner["label"] and runner["description"]

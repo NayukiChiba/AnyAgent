@@ -91,6 +91,7 @@ def create_app(
         load_frontend_config()
         app.state.configuration_manager = ConfigurationManager()
         tool_set = build_tool_set()
+        app.state.tool_set = tool_set
         factory = runner_factory or _build_factory(settings, tool_set)
         database = load_database_config()
         repository = SQLiteSessionRepository(
