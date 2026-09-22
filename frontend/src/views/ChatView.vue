@@ -2,6 +2,7 @@
 import { onBeforeRouteLeave } from 'vue-router'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import SettingSelect from '../components/SettingSelect.vue'
+import RunnerSwitcher from '../components/RunnerSwitcher.vue'
 import MarkdownMessage from '../components/MarkdownMessage.vue'
 import { request, streamHttp, streamWebSocket } from '../api.js'
 import { FRONTEND_CONFIG_REVISION_KEY } from '../configSync.js'
@@ -17,6 +18,10 @@ const loading = ref(true)
 const notice = ref('')
 const tools = ref([])
 const thread = ref(null)
+const renaming = ref(false)
+const renameValue = ref('')
+const renameSaving = ref(false)
+const renameInput = ref(null)
 let controller
 const title = computed(
   () => sessions.value.find((item) => item.id === currentId.value)?.title || '新会话',
@@ -76,6 +81,36 @@ async function removeSession() {
     else await newSession()
   } catch (error) {
     notice.value = error.message
+  }
+}
+function startRename() {
+  if (busy.value || !currentId.value) return
+  renameValue.value = title.value
+  renaming.value = true
+  nextTick(() => {
+    renameInput.value?.focus()
+    renameInput.value?.select()
+  })
+}
+function cancelRename() {
+  renaming.value = false
+}
+async function commitRename() {
+  if (!renaming.value || renameSaving.value) return
+  const next = renameValue.value.trim()
+  renaming.value = false
+  if (!next || next === title.value) return
+  renameSaving.value = true
+  try {
+    await request(`/api/v1/sessions/${currentId.value}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: next }),
+    })
+    await refreshSessions()
+  } catch (error) {
+    notice.value = error.message
+  } finally {
+    renameSaving.value = false
   }
 }
 async function send() {
@@ -161,10 +196,10 @@ onBeforeRouteLeave(
 <template>
   <div class="workspace">
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="AnyAgent 首页"
-        ><span class="brand-mark">A</span>AnyAgent<span class="version">0.1</span></a
+      <RouterLink class="brand" to="/" aria-label="AnyAgent 首页"
+        ><span class="brand-mark">A</span>AnyAgent<span class="version">0.1</span></RouterLink
       >
-      <div class="sidebar-caption">AGENT WORKSPACE</div>
+      <RunnerSwitcher :disabled="busy" @changed="refreshAgent()" @failed="notice = $event" />
       <button class="new-session" :disabled="busy || loading" @click="newSession">
         <span>＋</span> 新建会话
       </button>
@@ -179,59 +214,100 @@ onBeforeRouteLeave(
           :disabled="busy"
           @click="selectSession(session.id)"
         >
-          <span class="session-icon">◇</span><span class="session-title">{{ session.title }}</span>
+          <span class="session-title">{{ session.title }}</span>
         </button>
+        <p v-if="!sessions.length" class="sessions-empty">还没有会话</p>
       </nav>
       <div class="sidebar-footer">
-        <RouterLink to="/settings" class="sidebar-settings">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
+        <RouterLink to="/runners" class="nav-item">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24">
+            <rect
+              x="3"
+              y="4"
+              width="18"
+              height="7"
+              rx="2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+            <rect
+              x="3"
+              y="13"
+              width="18"
+              height="7"
+              rx="2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+          </svg>
+          Runner 管理
+        </RouterLink>
+        <RouterLink to="/settings" class="nav-item">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
             <path
-              d="m10 3-1 3-3 1-3 3 2 2-2 2 3 3 3 1 1 3h4l1-3 3-1 3-3-2-2 2-2-3-3-3-1-1-3Z"
+              d="M19 12a7 7 0 0 0-.14-1.4l2.1-1.63-2-3.46-2.48 1a7 7 0 0 0-2.42-1.4L13.66 2h-3.32l-.4 2.61a7 7 0 0 0-2.42 1.4l-2.48-1-2 3.46 2.1 1.63a7 7 0 0 0 0 2.8l-2.1 1.63 2 3.46 2.48-1a7 7 0 0 0 2.42 1.4l.4 2.61h3.32l.4-2.61a7 7 0 0 0 2.42-1.4l2.48 1 2-3.46-2.1-1.63c.09-.46.14-.93.14-1.4Z"
               fill="none"
               stroke="currentColor"
               stroke-width="1.5"
+              stroke-linejoin="round"
             />
-            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5" />
           </svg>
           设置
         </RouterLink>
-        <span class="memory-dot"></span><span class="memory-label">本机会话</span>
-        <p>聊天记录自动保存</p>
-        <a class="api-link" href="/docs" target="_blank" rel="noopener">API 文档 ↗</a>
+        <p class="sidebar-note">会话保存在本机数据库中</p>
       </div>
     </aside>
+
     <main class="main">
       <header class="topbar">
-        <div>
-          <span class="eyebrow">LANGCHAIN AGENT</span>
-          <h1>{{ title }}</h1>
-        </div>
-        <div class="topbar-actions">
-          <span class="status" :class="{ connected: agent?.configured }"
-            ><i></i>{{ agent?.configured ? '模型已配置' : '等待模型配置' }}</span
-          ><button
-            class="icon-button"
-            :disabled="busy"
-            @click="removeSession"
-            aria-label="删除当前会话"
+        <div class="topbar-title">
+          <input
+            v-if="renaming"
+            ref="renameInput"
+            v-model="renameValue"
+            class="rename-input"
+            aria-label="会话标题"
+            maxlength="60"
+            :disabled="renameSaving"
+            @keydown.enter.prevent="commitRename"
+            @keydown.esc="cancelRename"
+            @blur="commitRename"
+          />
+          <h1 v-else>{{ title }}</h1>
+          <button
+            v-if="!renaming"
+            class="btn btn-ghost btn-sm"
+            aria-label="重命名会话"
+            title="重命名会话"
+            :disabled="busy || !currentId"
+            @click="startRename"
           >
-            删除会话
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24">
+              <path
+                d="M17 3a2.8 2.8 0 1 1 4 4L8 20l-5 1 1-5Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+            </svg>
           </button>
         </div>
-      </header>
-      <section class="model-bar" aria-label="模型与连接设置">
-        <div>
-          <span class="model-icon">◈</span><strong>{{ agent?.model || '尚未选择模型' }}</strong
-          ><span class="provider">OpenAI Compatible</span>
-          <span v-if="agent" class="output-mode">{{
+        <div class="topbar-actions">
+          <span class="status-pill" :class="{ connected: agent?.configured }"
+            ><i></i>{{ agent?.configured ? agent.profile.name : '未启用 Runner' }}</span
+          >
+          <span v-if="agent?.configured" class="badge">{{
             agent.streaming ? '流式输出' : '非流式输出'
           }}</span>
-        </div>
-        <div class="connection-controls">
-          <label id="transport-label" for="transport">连接方式</label>
+          <span id="transport-label" class="picker-label">连接方式</span>
           <SettingSelect
             id="transport"
             v-model="transport"
+            class="transport-picker"
             :disabled="busy"
             labelledby="transport-label"
             :choices="[
@@ -240,59 +316,66 @@ onBeforeRouteLeave(
             ]"
           />
           <button
-            class="text-button"
-            :disabled="busy"
-            @click="refreshAgent({ syncTransport: true })"
+            class="btn btn-sm"
+            :disabled="busy || !currentId"
+            aria-label="删除当前会话"
+            @click="removeSession"
           >
-            刷新配置
+            删除
           </button>
         </div>
-      </section>
+      </header>
+
       <div v-if="agent && !agent.configured" class="config-hint">
-        还没有连接模型。<RouterLink to="/settings">打开设置</RouterLink
-        >，填写模型信息并测试连接，就能开始聊天。
+        还没有启用的 Runner。<RouterLink to="/runners">打开 Runner 管理</RouterLink>，创建一个
+        Runner 并填入连接信息，就能开始聊天。
       </div>
-      <div v-if="notice" class="notice" role="alert">{{ notice }}</div>
+      <div v-if="notice" class="chat-notice notice notice-error" role="alert">{{ notice }}</div>
+
       <section ref="thread" class="thread" aria-label="聊天消息" aria-live="polite">
-        <div v-if="!messages.length" class="welcome">
-          <div class="welcome-symbol">✳</div>
-          <span class="eyebrow">YOUR AGENT, ONE CONVERSATION AWAY</span>
-          <h2>从一个问题开始</h2>
-          <p>与 LangChain Agent 对话，让工具参与解决问题。</p>
-          <div class="suggestions">
-            <button
-              v-for="suggestion in suggestions"
-              :key="suggestion"
-              :disabled="busy"
-              @click="input = suggestion"
-            >
-              {{ suggestion }}<span>↗</span>
-            </button>
-          </div>
-        </div>
-        <article
-          v-for="(message, index) in messages"
-          :key="index"
-          class="message"
-          :class="message.role"
-        >
-          <div class="avatar">{{ message.role === 'user' ? '你' : 'A' }}</div>
-          <div class="message-body">
-            <span class="message-author">{{
-              message.role === 'user' ? '你' : 'LangChain Agent'
-            }}</span>
-            <MarkdownMessage
-              v-if="message.role === 'assistant' && message.content"
-              class="message-text"
-              :content="message.content"
-            />
-            <div v-else class="message-text">
-              {{ message.content || (busy ? '正在思考…' : '') }}
+        <div class="thread-inner">
+          <div v-if="!messages.length" class="welcome">
+            <div class="welcome-symbol">✳</div>
+            <h2>从一个问题开始</h2>
+            <p>与当前启用的 Runner 对话，让工具参与解决问题。</p>
+            <div class="suggestions">
+              <button
+                v-for="suggestion in suggestions"
+                :key="suggestion"
+                :disabled="busy"
+                @click="input = suggestion"
+              >
+                {{ suggestion }}<span>↗</span>
+              </button>
             </div>
-            <span v-if="busy && index === messages.length - 1" class="typing-indicator">● ● ●</span>
           </div>
-        </article>
+          <article
+            v-for="(message, index) in messages"
+            :key="index"
+            class="message"
+            :class="message.role"
+          >
+            <div class="avatar">{{ message.role === 'user' ? '你' : 'A' }}</div>
+            <div class="message-body">
+              <span class="message-author">{{
+                message.role === 'user' ? '你' : agent?.profile?.name || '助手'
+              }}</span>
+              <MarkdownMessage
+                v-if="message.role === 'assistant' && message.content"
+                class="message-text"
+                :content="message.content"
+              />
+              <div v-else class="message-text">
+                {{ message.content || (busy ? '正在思考…' : '') }}
+              </div>
+              <span v-if="busy && index === messages.length - 1" class="typing-indicator"
+                >● ● ●</span
+              >
+            </div>
+          </article>
+        </div>
       </section>
+
       <section v-if="tools.length" class="tool-panel" aria-label="本轮工具调用">
         <div class="tool-heading">
           工具执行 <span>{{ tools.length }}</span>
@@ -300,7 +383,7 @@ onBeforeRouteLeave(
         <details v-for="call in tools" :key="call.id" open>
           <summary>
             <span>⌘ {{ call.name }}</span
-            ><span :class="{ done: call.result !== null }">{{
+            ><span class="tool-state" :class="{ done: call.result !== null }">{{
               call.result === null ? '执行中' : '已完成'
             }}</span>
           </summary>
@@ -308,6 +391,7 @@ onBeforeRouteLeave(
           <p v-if="call.result !== null">结果：{{ call.result }}</p>
         </details>
       </section>
+
       <footer class="composer-wrap">
         <form class="composer" @submit.prevent="send">
           <label class="sr-only" for="message">消息内容</label
@@ -321,7 +405,7 @@ onBeforeRouteLeave(
             @keydown="handleKey"
           ></textarea>
           <div class="composer-bottom">
-            <span>↵ 发送 · Shift + Enter 换行</span
+            <span class="composer-hint">↵ 发送 · Shift + Enter 换行</span
             ><button v-if="busy" type="button" class="stop-button" @click="stop">■ 停止生成</button
             ><button
               v-else
@@ -332,7 +416,11 @@ onBeforeRouteLeave(
             </button>
           </div>
         </form>
-        <p class="composer-note">会话保存在本机数据库中 · 工具：calculate</p>
+        <p class="composer-note">
+          {{
+            agent?.tools?.length ? `可用工具：${agent.tools.join('、')}` : '当前引擎不使用本地工具'
+          }}
+        </p>
       </footer>
     </main>
   </div>
