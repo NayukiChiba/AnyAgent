@@ -25,5 +25,5 @@ test('web restart waits for a new ready instance before reopening settings', asy
   await expect(page.getByRole('button', { name: '正在重启…' })).toBeDisabled()
   await page.waitForEvent('load')
   expect(checks).toBeGreaterThanOrEqual(2)
-  await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '网页偏好' })).toBeVisible()
 })
