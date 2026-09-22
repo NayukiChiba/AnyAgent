@@ -73,9 +73,9 @@ test('assistant Markdown renders safely with highlighted code, copy and mobile o
   expect(await page.evaluate(() => window.markdownAttack)).toBeUndefined()
   await reply.getByRole('button', { name: '复制代码' }).first().click()
   await expect(reply.getByRole('status')).toHaveText('代码已复制')
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    'def greet():\n    print("你好")\n',
-  )
+  // Windows 平台写入系统剪贴板时换行会被规范化为 CRLF
+  const copied = await page.evaluate(() => navigator.clipboard.readText())
+  expect(copied.replaceAll('\r\n', '\n')).toBe('def greet():\n    print("你好")\n')
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: '/tmp/anyagent-markdown-mobile.png', fullPage: true })

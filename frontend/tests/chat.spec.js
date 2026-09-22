@@ -6,8 +6,9 @@ test('Vue chat uses WebSocket and HTTP, runs tools, persists and deletes session
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/')
-  await expect(page.getByText('browser-fixture', { exact: true })).toBeVisible()
-  await expect(page.getByText('模型已配置', { exact: true })).toBeVisible()
+  // 旧版模型连接迁移为活动档案，切换器与状态条都展示它
+  await expect(page.locator('.runner-trigger')).toContainText('browser-fixture')
+  await expect(page.locator('.status-pill.connected')).toContainText('默认连接（旧版迁移）')
   await page.getByLabel('消息内容').fill('计算 2+3')
   await page.getByRole('button', { name: '发送 ↑' }).click()
   await expect(page.locator('.assistant .message-text')).toHaveText('结果是 5')
@@ -22,12 +23,17 @@ test('Vue chat uses WebSocket and HTTP, runs tools, persists and deletes session
   await expect(page.getByRole('button', { name: '停止生成' })).toHaveCount(0)
   await page.reload()
   await expect(page.locator('.assistant .message-text')).toHaveCount(2)
+  // 重命名会话
+  await page.getByRole('button', { name: '重命名会话' }).click()
+  await page.getByLabel('会话标题').fill('计算记录')
+  await page.getByLabel('会话标题').press('Enter')
+  await expect(page.getByRole('heading', { name: '计算记录' })).toBeVisible()
   await page.getByRole('button', { name: '新建会话' }).click()
   await expect(page.getByRole('heading', { name: '从一个问题开始' })).toBeVisible()
   await page
     .getByRole('navigation', { name: '会话列表' })
     .getByRole('button')
-    .filter({ hasText: '计算 2+3' })
+    .filter({ hasText: '计算记录' })
     .click()
   await expect(page.locator('.assistant .message-text')).toHaveCount(2)
   await page.getByRole('button', { name: '删除当前会话' }).click()

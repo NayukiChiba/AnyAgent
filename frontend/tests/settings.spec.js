@@ -11,75 +11,36 @@ async function restore(request, original) {
   })
 }
 
-test('settings save a model, preserve its key, test the SDK connection and open non-streaming chat', async ({
-  page,
-  request,
-}) => {
-  const original = await savedGroup(request, 'model_config')
-  const errors = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  try {
-    await page.goto('/')
-    await page.getByRole('link', { name: '设置', exact: true }).click()
-    await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
-    await expect(page.locator('.settings-sidebar')).toHaveCSS(
-      'background-color',
-      'rgb(242, 245, 249)',
-    )
-    await expect(page.locator('.hot-reload-notice')).toHaveCSS(
-      'background-color',
-      'rgb(255, 248, 231)',
-    )
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
-      'placeholder',
-      '填写 API Key',
-    )
-    await page.getByLabel('流式输出', { exact: true }).uncheck()
-    await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
-    await expect(page.locator('.settings-action-dock')).toHaveCSS('position', 'fixed')
-    await expect(page.locator('.settings-action-dock')).toHaveCSS('flex-direction', 'column')
-    await expect(page.locator('.settings-main')).toHaveCSS('padding-right', '180px')
-    await expect(page.getByRole('button', { name: '测试已保存的连接' })).toBeDisabled()
-    await page.getByRole('button', { name: '保存设置', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('设置已保存')
-    await page.reload()
-    await expect(page.getByLabel('流式输出', { exact: true })).not.toBeChecked()
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
-    const before = await (await request.get('/api/v1/sessions')).json()
-    await page.getByRole('button', { name: '测试已保存的连接' }).click()
-    await expect(page.getByRole('status')).toContainText('模型连接正常')
-    expect(await (await request.get('/api/v1/sessions')).json()).toEqual(before)
-    await page.getByRole('link', { name: '返回聊天' }).click()
-    await expect(page.getByText('非流式输出', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '新建会话' }).click()
-    await page.getByLabel('消息内容').fill('计算 2+3')
-    await page.getByRole('button', { name: '发送 ↑' }).click()
-    await expect(page.locator('.assistant .message-text')).toHaveText('结果是 5')
-    await expect(page.getByText('结果：5.0', { exact: true })).toBeVisible()
-    expect(errors).toEqual([])
-  } finally {
-    await restore(request, original)
-  }
-})
-
-test('all configuration groups render with validation, dirty guards and restart feedback', async ({
+test('configuration groups render with validation, dirty guards and restart feedback', async ({
   page,
   request,
 }) => {
   const original = await savedGroup(request, 'cmd_config')
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
   try {
     await page.goto('/settings')
+    // 默认展示网页偏好；模型连接与执行引擎已由 Runner 管理接管
+    await expect(page.getByRole('heading', { name: '网页偏好' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '模型连接' })).toHaveCount(0)
+    await expect(page.locator('.settings-sidebar')).toHaveCSS('background-color', 'rgb(16, 16, 20)')
+    await expect(page.locator('.hot-reload-notice')).toHaveCSS(
+      'background-color',
+      'rgb(255, 251, 235)',
+    )
     await page.getByRole('button', { name: '系统设置', exact: true }).click()
     await expect(page.locator('.restart-required-notice')).toHaveCSS(
       'background-color',
-      'rgb(255, 240, 240)',
+      'rgb(254, 242, 242)',
     )
     for (const name of ['Agent 行为', '会话存储', '日志', '服务'])
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     await expect(page.getByText('高级设置')).toHaveCount(0)
+    await expect(page.getByLabel('执行引擎')).toHaveCount(0)
     await page.getByLabel('服务端口').fill('0')
+    await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
+    await expect(page.locator('.settings-action-dock')).toHaveCSS('position', 'fixed')
+    await expect(page.locator('.settings-action-dock')).toHaveCSS('flex-direction', 'column')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('alert').first()).toContainText('请检查标出的设置')
     await expect(page.getByLabel('服务端口')).toHaveAttribute('aria-invalid', 'true')
@@ -93,53 +54,28 @@ test('all configuration groups render with validation, dirty guards and restart 
     await page.getByLabel('服务端口').fill('9001')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('需要重启服务')
-    for (const name of ['网页偏好', '模型连接']) {
-      await page.getByRole('button', { name, exact: true }).click()
-      await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
-    }
-    await expect(page.getByLabel('回答随机性')).toBeVisible()
-    page.once('dialog', (dialog) => dialog.accept())
-    await page.getByRole('button', { name: '恢复模型连接默认值' }).click()
-    await expect(page.getByLabel('启用模型')).not.toBeChecked()
-    await expect(page.getByLabel('模型名称', { exact: true })).toHaveValue('')
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
-      'placeholder',
-      '填写 API Key',
-    )
-    await page.getByRole('button', { name: '撤销修改' }).click()
-    await expect(page.getByLabel('启用模型')).toBeChecked()
-    await page.setViewportSize({ width: 390, height: 844 })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  } finally {
-    await restore(request, original)
-  }
-})
-
-test('first use configures a disabled model entirely in the web UI', async ({ page, request }) => {
-  const original = await savedGroup(request, 'model_config')
-  try {
-    await request.put('/api/v1/settings/model_config', {
-      data: {
-        revision: original.revision,
-        values: { enabled: false, model: '' },
-        clear_api_key: true,
-      },
-    })
-    await page.goto('/')
-    await page.getByRole('link', { name: '打开设置' }).click()
-    await expect(page.getByLabel('启用模型')).not.toBeChecked()
-    await page.getByLabel('模型名称', { exact: true }).fill('browser-fixture')
-    await page.getByLabel('API Key', { exact: true }).fill('browser-local-key')
-    await page.getByLabel('启用模型').check()
+    // 恢复默认值：先把网页偏好改为非默认值并保存，恢复默认后才产生可撤销的修改
+    await page.getByRole('button', { name: '网页偏好', exact: true }).click()
+    await expect(page.getByRole('heading', { name: '网页偏好', exact: true })).toBeVisible()
+    await page.getByRole('combobox', { name: '默认连接方式' }).click()
+    await page.getByRole('option', { name: 'HTTP（SSE）', exact: true }).click()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
-    await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('••••••••••••')
-    await page.getByRole('button', { name: '测试已保存的连接' }).click()
-    await expect(page.getByRole('status')).toContainText('模型连接正常')
-    await page.getByRole('link', { name: '返回聊天' }).click()
-    await expect(page.getByText('模型已配置', { exact: true })).toBeVisible()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: '恢复网页偏好默认值' }).click()
+    await expect(page.getByRole('combobox', { name: '默认连接方式' })).toHaveText('WebSocket')
+    await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
+    await page.getByRole('button', { name: '撤销修改' }).click()
+    await expect(page.getByRole('combobox', { name: '默认连接方式' })).toHaveText('HTTP（SSE）')
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
   } finally {
     await restore(request, original)
+    const frontend = await savedGroup(request, 'frontend_config')
+    await request.put('/api/v1/settings/frontend_config', {
+      data: { revision: frontend.revision, values: { default_transport: 'websocket' } },
+    })
   }
 })
 
@@ -169,18 +105,15 @@ test('saving webpage preferences hot reloads an open chat view', async ({
   }
 })
 
-test('sidebar settings and outlined controls support keyboard and mobile layout', async ({
+test('sidebar navigation and outlined controls support keyboard and mobile layout', async ({
   page,
 }) => {
   await page.goto('/')
   const sidebar = page.locator('.sidebar-footer')
   await expect(sidebar.getByRole('link', { name: '设置', exact: true })).toBeVisible()
   await sidebar.getByRole('link', { name: '设置', exact: true }).click()
-  const toggle = page.getByLabel('流式输出', { exact: true })
-  await expect(toggle).toHaveCSS('appearance', 'none')
-  await expect(toggle).toHaveCSS('width', '42px')
+  await expect(page).toHaveURL(/\/settings$/)
   await page.screenshot({ path: '/tmp/anyagent-settings-desktop.png', fullPage: true })
-  await page.getByRole('button', { name: '网页偏好', exact: true }).click()
   const select = page.getByRole('combobox', { name: '默认连接方式', exact: true })
   await select.focus()
   await select.press('ArrowDown')
