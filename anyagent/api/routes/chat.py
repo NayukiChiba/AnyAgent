@@ -28,6 +28,11 @@ class MessageInput(BaseModel):
         return value.strip()
 
 
+class SessionRenameInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=60)
+
+
 def error_data(error: ChatError) -> dict:
     return {"type": "error", "data": {"code": error.code, "message": error.message}}
 
@@ -36,6 +41,7 @@ def http_error(error: ChatError) -> HTTPException:
     status = {
         "session_not_found": 404,
         "session_busy": 409,
+        "session_not_running": 409,
         "invalid_message": 422,
         "capacity_exceeded": 429,
         "session_limit": 429,
@@ -93,6 +99,26 @@ async def delete_session(session_id: str, request: Request) -> None:
         await service(request).delete_session(session_id)
     except ChatError as error:
         raise http_error(error) from error
+
+
+@router.patch("/api/v1/sessions/{session_id}", tags=["sessions"])
+async def rename_session(
+    session_id: str, body: SessionRenameInput, request: Request
+) -> dict:
+    try:
+        return asdict(await service(request).rename_session(session_id, body.title))
+    except ChatError as error:
+        raise http_error(error) from error
+
+
+@router.post("/api/v1/sessions/{session_id}/cancel", tags=["agent"])
+async def cancel_run(session_id: str, request: Request) -> dict:
+    """停止会话当前的生成（与 WebSocket cancel 等价）。"""
+    try:
+        service(request).cancel(session_id)
+    except ChatError as error:
+        raise http_error(error) from error
+    return {"message": "已停止生成"}
 
 
 @router.post("/api/v1/sessions/{session_id}/messages", tags=["agent"])
