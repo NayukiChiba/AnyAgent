@@ -47,9 +47,7 @@ def to_domain(messages: list[OpenAIMessage]) -> tuple[Message, ...]:
         content = message.content or ""
         if message.role == "tool":
             result.append(
-                Message(
-                    "tool", content, tool_call_id=message.tool_call_id or "unknown"
-                )
+                Message("tool", content, tool_call_id=message.tool_call_id or "unknown")
             )
         else:
             result.append(Message(message.role, content))

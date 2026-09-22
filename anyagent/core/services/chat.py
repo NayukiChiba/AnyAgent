@@ -143,7 +143,9 @@ class ChatService:
                 )
                 yield Event("result", {"content": result, "session_id": session_id})
 
-    async def run_stateless(self, messages: tuple[Message, ...]) -> AsyncIterator[Event]:
+    async def run_stateless(
+        self, messages: tuple[Message, ...]
+    ) -> AsyncIterator[Event]:
         """无会话执行一轮对话（供 OpenAI 兼容网关），不写入存储。
 
         历史由调用方携带，仅保留最近 max_history_messages 条；
