@@ -1,21 +1,15 @@
-.restart-button {
-  border: 1px solid #d9bd9f;
-  background: white;
-  color: #956b42;
-  border-radius: 9px;
-  font-size: 13px;
-}
-.restart-button:hover:not(:disabled) {
-  background: #f5eee7;
-}
+/* 重启控件：按钮复用 .btn，反馈文字使用语义色 */
+
 .restart-feedback {
-  color: #5269b4;
+  color: var(--accent);
   font-size: 12px;
   line-height: 1.7;
 }
+
 .restart-feedback.error {
-  color: #ab4747;
+  color: var(--danger);
 }
+
 .restart-feedback a {
   display: block;
   margin-top: 8px;
