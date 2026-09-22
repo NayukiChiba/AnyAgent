@@ -106,7 +106,7 @@ onBeforeUnmount(() => {
   <div class="restart-control">
     <button
       type="button"
-      class="restart-button"
+      class="btn btn-sm restart-button"
       :disabled="disabled || !supported || restarting"
       :title="explanation"
       @click="restart"
