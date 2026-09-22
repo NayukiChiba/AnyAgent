@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import SettingSelect from './SettingSelect.vue'
 const props = defineProps({
   field: { type: Object, required: true },
@@ -7,31 +7,15 @@ const props = defineProps({
   modelValue: { required: true },
   error: { type: String, default: '' },
   disabled: Boolean,
-  hasApiKey: Boolean,
-  clearApiKey: Boolean,
 })
-const emit = defineEmits(['update:modelValue', 'clear-key'])
-const revealed = ref(false)
-const SECRET_MASK = '••••••••••••'
+const emit = defineEmits(['update:modelValue'])
 const id = computed(
   () =>
     `setting-${props.idPrefix ? `${props.idPrefix}-` : ''}${props.field.path.replaceAll('.', '-')}`,
 )
-const showingStoredSecret = computed(
-  () =>
-    props.field.control === 'password' &&
-    props.hasApiKey &&
-    !props.clearApiKey &&
-    !props.modelValue,
-)
-const displayedValue = computed(() => (showingStoredSecret.value ? SECRET_MASK : props.modelValue))
 function update(event) {
   const raw = event.target.value
-  if (showingStoredSecret.value && raw === SECRET_MASK) return
   emit('update:modelValue', props.field.control === 'number' && raw !== '' ? Number(raw) : raw)
-}
-function focusSecret(event) {
-  if (showingStoredSecret.value) event.target.select()
 }
 </script>
 
@@ -42,12 +26,14 @@ function focusSecret(event) {
   >
     <div class="field-heading">
       <label :id="`${id}-label`" :for="id">{{ field.label }}</label>
-      <span v-if="field.control === 'switch'">{{ modelValue ? '已开启' : '已关闭' }}</span>
+      <span v-if="field.control === 'switch'" class="switch-state">{{
+        modelValue ? '已开启' : '已关闭'
+      }}</span>
     </div>
     <input
       v-if="field.control === 'switch'"
       :id="id"
-      class="setting-toggle"
+      class="switch"
       type="checkbox"
       :checked="modelValue"
       :disabled="disabled"
@@ -68,6 +54,7 @@ function focusSecret(event) {
     <textarea
       v-else-if="field.control === 'textarea'"
       :id="id"
+      class="textarea"
       :value="modelValue"
       rows="5"
       :disabled="disabled"
@@ -75,31 +62,10 @@ function focusSecret(event) {
       :aria-describedby="`${id}-hint`"
       @input="update"
     />
-    <div v-else-if="field.control === 'password'" class="secret-input">
-      <input
-        :id="id"
-        :type="revealed ? 'text' : 'password'"
-        :value="displayedValue"
-        :class="{ 'stored-secret': showingStoredSecret }"
-        :disabled="disabled"
-        autocomplete="new-password"
-        :placeholder="clearApiKey ? '保存后将清除密钥' : '填写 API Key'"
-        :aria-invalid="!!error"
-        :aria-describedby="`${id}-hint`"
-        @focus="focusSecret"
-        @input="update"
-      />
-      <button
-        type="button"
-        :disabled="disabled || showingStoredSecret"
-        @click="revealed = !revealed"
-      >
-        {{ showingStoredSecret ? '已隐藏' : revealed ? '隐藏' : '显示' }}
-      </button>
-    </div>
     <input
       v-else
       :id="id"
+      class="input"
       :type="field.control === 'number' ? 'number' : 'text'"
       :value="modelValue"
       :min="field.min"
@@ -118,12 +84,6 @@ function focusSecret(event) {
       >
       <span v-else-if="field.min != null">至少为 {{ field.min }}。</span>
     </p>
-    <div v-if="field.control === 'password' && hasApiKey" class="secret-actions">
-      <span>{{ clearApiKey ? '保存后将清除密钥' : '已保存密钥，使用掩码保护其内容' }}</span>
-      <button type="button" :disabled="disabled" @click="emit('clear-key')">
-        {{ clearApiKey ? '保留原密钥' : '清除已保存密钥' }}
-      </button>
-    </div>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
   </div>
 </template>
