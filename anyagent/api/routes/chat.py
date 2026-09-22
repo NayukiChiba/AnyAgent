@@ -37,18 +37,22 @@ def error_data(error: ChatError) -> dict:
     return {"type": "error", "data": {"code": error.code, "message": error.message}}
 
 
+# ChatError 业务码到 HTTP 状态码的映射，供平台路由与 OpenAI 兼容路由共用
+ERROR_STATUS = {
+    "session_not_found": 404,
+    "session_busy": 409,
+    "session_not_running": 409,
+    "invalid_message": 422,
+    "capacity_exceeded": 429,
+    "session_limit": 429,
+    "model_not_configured": 503,
+    "run_timeout": 504,
+    "storage_unavailable": 503,
+}
+
+
 def http_error(error: ChatError) -> HTTPException:
-    status = {
-        "session_not_found": 404,
-        "session_busy": 409,
-        "session_not_running": 409,
-        "invalid_message": 422,
-        "capacity_exceeded": 429,
-        "session_limit": 429,
-        "model_not_configured": 503,
-        "run_timeout": 504,
-        "storage_unavailable": 503,
-    }.get(error.code, 502)
+    status = ERROR_STATUS.get(error.code, 502)
     return HTTPException(status, detail=error_data(error)["data"])
 
 
