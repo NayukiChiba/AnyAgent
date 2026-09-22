@@ -13,6 +13,20 @@ from anyagent.configs.default import (
 )
 
 
+def validate_http_base_url(value: str) -> str:
+    """校验 HTTP(S) 接口基础地址并去除末尾斜杠。"""
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Model base URL must be an HTTP or HTTPS address")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("Model base URL cannot contain credentials, query or fragment")
+    if parsed.port is not None and not 1 <= parsed.port <= 65535:
+        raise ValueError("Model URL port must be between 1 and 65535")
+    if value.rstrip("/").endswith("/chat/completions"):
+        raise ValueError("Model URL must be a base URL, not a completion endpoint")
+    return value.rstrip("/")
+
+
 class ModelSettings(BaseSettings):
     enabled: bool = DEFAULT_MODEL_CONFIG["enabled"]
     streaming: bool = Field(default=DEFAULT_MODEL_CONFIG["streaming"], strict=True)
@@ -33,18 +47,7 @@ class ModelSettings(BaseSettings):
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("Model base URL must be an HTTP or HTTPS address")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError(
-                "Model base URL cannot contain credentials, query or fragment"
-            )
-        if parsed.port is not None and not 1 <= parsed.port <= 65535:
-            raise ValueError("Model URL port must be between 1 and 65535")
-        if value.rstrip("/").endswith("/chat/completions"):
-            raise ValueError("Model URL must be a base URL, not a completion endpoint")
-        return value.rstrip("/")
+        return validate_http_base_url(value)
 
     @model_validator(mode="after")
     def validate_enabled_model(self) -> "ModelSettings":
