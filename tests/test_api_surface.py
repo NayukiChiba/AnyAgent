@@ -73,7 +73,8 @@ def test_tools_listing(runtime_paths):
 def test_runners_listing(runtime_paths):
     with TestClient(create_app(runner_factory=Factory())) as client:
         data = client.get("/api/v1/runners").json()
-        assert data["current"] == "langchain"
+        # 注入 stub 工厂时无活动档案，current 为 None
+        assert data["current"] is None
         ids = [runner["id"] for runner in data["runners"]]
         assert ids == [
             "langchain",
@@ -88,6 +89,18 @@ def test_runners_listing(runtime_paths):
             assert runner["kind"] in ("local", "remote")
             assert isinstance(runner["tools"], bool)
             assert runner["label"] and runner["description"]
+        # 启用档案后 current 反映档案类型
+        profile = client.post(
+            "/api/v1/profiles",
+            json={
+                "name": "测试 Dify",
+                "type": "dify",
+                "base_url": "https://api.dify.ai/v1",
+                "api_key": "app-test",
+            },
+        ).json()
+        client.post(f"/api/v1/profiles/{profile['id']}/activate")
+        assert client.get("/api/v1/runners").json()["current"] == "dify"
 
 
 def test_stats_via_api(runtime_paths):
@@ -101,7 +114,7 @@ def test_stats_via_api(runtime_paths):
         assert stats["runs_failed"] == 0
         assert stats["active_runs"] == 0
         assert stats["sessions"] == 1
-        assert stats["runner"] == "langchain"
+        assert stats["runner"] is None  # 注入 stub 工厂时无活动档案
 
 
 def test_logs_tail_via_api(runtime_paths):

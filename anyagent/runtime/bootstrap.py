@@ -24,9 +24,9 @@ from anyagent.configs import (
 )
 from anyagent.configs.agent import LangChainSettings
 from anyagent.configs.management import ConfigurationManager
+from anyagent.configs.profiles import ProfileStore, RunnerProfile
 from anyagent.core.domain.chat import ChatError
-from anyagent.core.ports.chat import RunnerFactory
-from anyagent.core.ports.model import ChatClient
+from anyagent.core.ports.chat import AgentRunner, RunnerFactory
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.openai.client import OpenAIClient
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
@@ -36,43 +36,62 @@ from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-def _openai_client_loader() -> ChatClient:
-    """每次调用重读模型连接配置并创建客户端，支撑连接热更新。"""
-    connection = load_model_config()
-    if not connection.enabled:
-        raise ChatError(
-            "model_not_configured",
-            "请在 data/configs/model_config.json 配置并启用模型",
-        )
-    return OpenAIClient(connection)
+# 支持连接测试的引擎（走 OpenAI 兼容协议）
+TESTABLE_TYPES = ("langchain", "langgraph", "loop", "pi")
 
 
-def _build_factory(
+def _runner_for(
+    profile: RunnerProfile,
     settings: LangChainSettings,
     tool_set,
 ) -> RunnerFactory:
-    """按配置的 runner 名称装配对应 factory。"""
-    match settings.runner:
+    """按档案类型构建对应 runner；档案即连接，互不共享状态。"""
+    model_loader = lambda: profile.as_model_settings()  # noqa: E731
+    client_loader = lambda: OpenAIClient(profile.as_model_settings())  # noqa: E731
+    match profile.type:
         case "langgraph":
-            return LangGraphRunnerFactory(settings, tool_set)
+            factory = LangGraphRunnerFactory(
+                settings, tool_set, model_loader=model_loader
+            )
         case "loop":
-            return LoopRunnerFactory(
-                _openai_client_loader,
+            factory = LoopRunnerFactory(
+                client_loader,
                 tool_set,
                 system_prompt=settings.system_prompt,
                 max_steps=settings.max_steps,
             )
         case "dify":
-            return DifyRunnerFactory()
+            factory = DifyRunnerFactory(model_loader=model_loader)
         case "coze":
-            return CozeRunnerFactory(settings.coze_bot_id)
+            factory = CozeRunnerFactory(profile.bot_id, model_loader=model_loader)
         case "pi":
-            return PiRunnerFactory(_openai_client_loader)
+            factory = PiRunnerFactory(client_loader)
         case "deerflow":
-            return DeerFlowRunnerFactory()
+            factory = DeerFlowRunnerFactory(model_loader=model_loader)
         case _:
-            return LangChainRunnerFactory(settings, tool_set)
+            factory = LangChainRunnerFactory(
+                settings, tool_set, model_loader=model_loader
+            )
+    return factory
+
+
+class ProfileRunnerFactory:
+    """每次创建时读取活动档案并按其类型委托对应工厂，支撑热切换。"""
+
+    def __init__(self, store: ProfileStore, settings: LangChainSettings, tool_set):
+        self._store = store
+        self._settings = settings
+        self._tool_set = tool_set
+
+    async def create(self) -> AgentRunner:
+        profile = self._store.active()
+        if profile is None:
+            raise ChatError(
+                "model_not_configured",
+                "请先在 Runner 页面创建并启用一个 Runner",
+            )
+        factory = _runner_for(profile, self._settings, self._tool_set)
+        return await factory.create()
 
 
 def create_app(
@@ -90,9 +109,13 @@ def create_app(
         load_model_config()
         load_frontend_config()
         app.state.configuration_manager = ConfigurationManager()
+        profile_store = ProfileStore()
+        app.state.profile_store = profile_store
         tool_set = build_tool_set()
         app.state.tool_set = tool_set
-        factory = runner_factory or _build_factory(settings, tool_set)
+        factory = runner_factory or ProfileRunnerFactory(
+            profile_store, settings, tool_set
+        )
         database = load_database_config()
         repository = SQLiteSessionRepository(
             database.file_path,
@@ -129,13 +152,18 @@ def create_app(
                         "probe_busy", "已有模型连接测试正在进行，请稍后重试"
                     )
                 async with probe_lock:
-                    connection = load_model_config()
-                    if not connection.enabled:
+                    profile = profile_store.active()
+                    if profile is None:
                         raise ChatError(
                             "model_not_configured",
-                            "请在 data/configs/model_config.json 配置并启用模型",
+                            "请先创建并启用一个 Runner",
                         )
-                    client = OpenAIClient(connection)
+                    if profile.type not in TESTABLE_TYPES:
+                        raise ChatError(
+                            "unsupported",
+                            "该平台引擎由服务端托管，无需连接测试",
+                        )
+                    client = OpenAIClient(profile.as_model_settings())
                     try:
                         await client.test()
                     finally:
@@ -144,13 +172,22 @@ def create_app(
             app.state.test_model = test_model
 
             def agent_info() -> dict:
-                connection = load_model_config()
+                profile = profile_store.active()
                 return {
-                    "runner": settings.runner,
-                    "configured": connection.enabled,
-                    "model": connection.model,
-                    "base_url": connection.base_url,
-                    "streaming": connection.streaming,
+                    "runner": profile.type if profile else None,
+                    "profile": (
+                        {
+                            "id": profile.id,
+                            "name": profile.name,
+                            "type": profile.type,
+                        }
+                        if profile
+                        else None
+                    ),
+                    "configured": profile is not None,
+                    "model": profile.model if profile else "",
+                    "base_url": profile.base_url if profile else "",
+                    "streaming": profile.streaming if profile else False,
                     "limits": {"max_input_chars": settings.max_input_chars},
                     "frontend": load_frontend_config().model_dump(),
                     "storage": "sqlite",
