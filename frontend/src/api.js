@@ -13,6 +13,19 @@ export async function request(path, options = {}) {
   return response.status === 204 ? null : response.json()
 }
 
+/* Runner 档案：增删查改与启用切换 */
+export const listProfiles = () => request('/api/v1/profiles')
+export const createProfile = (values) =>
+  request('/api/v1/profiles', { method: 'POST', body: JSON.stringify(values) })
+export const updateProfile = (id, values) =>
+  request(`/api/v1/profiles/${id}`, { method: 'PUT', body: JSON.stringify(values) })
+export const deleteProfile = (id) => request(`/api/v1/profiles/${id}`, { method: 'DELETE' })
+export const activateProfile = (id) =>
+  request(`/api/v1/profiles/${id}/activate`, { method: 'POST' })
+/* 连接测试作用于当前启用的档案 */
+export const testActiveProfile = () =>
+  request('/api/v1/settings/model_config/test', { method: 'POST' })
+
 export function createEventParser(onEvent) {
   let pending = ''
   return {
