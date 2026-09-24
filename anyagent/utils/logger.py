@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from anyagent.configs.models import LoggingSettings
 
 
+from anyagent.utils.logbroker import BrokerHandler
+
 __all__ = ["AnyAgentLogger", "LogManager", "get_logger", "logger"]
 
 
@@ -194,8 +196,14 @@ class LogManager:
         cls._queue_handler = QueueHandler(queue)
         cls._queue_handler.setLevel(settings.level)
         cls._queue_handler.addFilter(_ApplicationLogFilter(settings.third_party_level))
+        # 广播处理器不做格式化输出，只把日志扇出给 Web 实时日志订阅者；
+        # 入队前的级别与过滤已生效，这里接收全部通过过滤的记录。
         cls._listener = QueueListener(
-            queue, console_handler, file_handler, respect_handler_level=True
+            queue,
+            console_handler,
+            file_handler,
+            BrokerHandler(),
+            respect_handler_level=True,
         )
         root = logging.getLogger()
         cls._previous_root_level = root.level
