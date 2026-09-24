@@ -4,45 +4,48 @@
 
     {"active": "<profile-id>", "profiles": [RunnerProfile, ...]}
 
+档案只保存引擎类型与模型连接引用（model_id），连接信息统一由
+模型连接档案（model_profiles.json）维护，多个 Runner 可共用同一连接。
+
 旧版兼容：档案文件不存在时，从模型连接配置派生唯一的活动档案
 （保持按次重读的热更新行为）；首次写操作创建文件并脱离兼容模式，
 派生档案会以 id=legacy 正式落盘，已有的连接配置不会丢失。
+
+数据迁移：读取时若发现旧版档案内联了连接信息（含 base_url 字段），
+自动拆分为模型连接档案 + 引用，并落盘为新格式。
 """
 
-import json
-import time
 from pathlib import Path
-from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from anyagent.configs import paths
-from anyagent.configs.agent import ModelSettings, validate_http_base_url
+from anyagent.configs.json_store import JsonDocumentStore, dump_profile
 from anyagent.configs.load import load_langchain_config, load_model_config
+from anyagent.configs.model_profiles import (
+    LEGACY_MODEL_ID,
+    ModelProfile,
+    ModelProfileStore,
+)
 from anyagent.core.domain.chat import ChatError
 from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 RUNNER_TYPES = ("langchain", "langgraph", "loop", "dify", "coze", "pi", "deerflow")
-# 本地编排引擎与 Pi 直接调用模型 API，必须填写模型名称
+# 本地编排引擎与 Pi 直接调用模型 API，引用的模型连接必须填写模型名称
 MODEL_REQUIRED_TYPES = ("langchain", "langgraph", "loop", "pi")
 LEGACY_PROFILE_ID = "legacy"
 
 
 class RunnerProfile(BaseModel):
-    """一个 runner 的自包含配置：标识 + 类型 + 连接信息。"""
+    """一个 runner 的自包含配置：标识 + 类型 + 模型连接引用。"""
 
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     name: str = Field(min_length=1, max_length=40)
-    type: Literal["langchain", "langgraph", "loop", "dify", "coze", "pi", "deerflow"]
-    base_url: str
-    model: str = ""
-    api_key: SecretStr = SecretStr("")
-    streaming: bool = Field(default=True, strict=True)
-    timeout_seconds: int = Field(default=60, ge=1, le=600, strict=True)
-    temperature: float = Field(default=0.7, ge=0, le=2)
+    type: str = Field(pattern="^(langchain|langgraph|loop|dify|coze|pi|deerflow)$")
+    model_id: str = Field(min_length=1)
     bot_id: str = ""
 
     @field_validator("name")
@@ -53,48 +56,23 @@ class RunnerProfile(BaseModel):
             raise ValueError("名称不能为空")
         return value
 
-    @field_validator("base_url")
-    @classmethod
-    def check_base_url(cls, value: str) -> str:
-        return validate_http_base_url(value)
-
     @model_validator(mode="after")
     def check_required_fields(self) -> "RunnerProfile":
-        if self.type in MODEL_REQUIRED_TYPES and not self.model.strip():
-            raise ValueError("该引擎需要填写模型名称")
         if self.type == "coze" and not self.bot_id.strip():
             raise ValueError("Coze 引擎需要填写 Bot ID")
-        if not self.api_key.get_secret_value().strip():
-            raise ValueError("请填写 API Key（无需认证的本地服务可填 local）")
         return self
 
-    def as_model_settings(self) -> ModelSettings:
-        """转换为模型连接配置，供既有 runner 工厂复用。"""
-        return ModelSettings(
-            enabled=True,
-            streaming=self.streaming,
-            base_url=self.base_url,
-            # 平台引擎不使用模型名称，以类型名占位满足连接校验
-            model=self.model.strip() or self.type,
-            api_key=self.api_key,
-            temperature=self.temperature,
-            timeout_seconds=self.timeout_seconds,
-        )
 
-
-class ProfileStore:
+class ProfileStore(JsonDocumentStore):
     """Runner 档案的读写与启用切换。
 
     旧版兼容模式：档案文件不存在时，从模型连接配置派生活动档案；
     任何写操作都会创建档案文件并脱离兼容模式。
     """
 
-    def __init__(self, path: Path | None = None):
-        self._path = path or paths.get_config_path("runner_profiles")
-
-    @property
-    def legacy_mode(self) -> bool:
-        return not self._path.is_file()
+    def __init__(self, path: Path | None = None, *, model_store: ModelProfileStore):
+        super().__init__(path or paths.get_config_path("runner_profiles"))
+        self._model_store = model_store
 
     def list(self) -> list[RunnerProfile]:
         data = self._read()
@@ -130,7 +108,7 @@ class ProfileStore:
         stored = self.list()
         stored.append(profile)
         active = self.active_id() or profile.id
-        self._write({"active": active, "profiles": [self._dump(p) for p in stored]})
+        self._write({"active": active, "profiles": [dump_profile(p) for p in stored]})
         logger.info("Runner profile created: id=%s type=%s", profile.id, profile.type)
         return profile
 
@@ -140,7 +118,7 @@ class ProfileStore:
             raise ChatError("profile_not_found", "Runner 档案不存在")
         stored = [profile if p.id == profile.id else p for p in stored]
         self._write(
-            {"active": self.active_id(), "profiles": [self._dump(p) for p in stored]}
+            {"active": self.active_id(), "profiles": [dump_profile(p) for p in stored]}
         )
         logger.info("Runner profile updated: id=%s", profile.id)
         return profile
@@ -154,7 +132,7 @@ class ProfileStore:
         if active == profile_id:
             # 活动档案被删除时回落到剩余的第一个，避免服务立即不可用
             active = stored[0].id if stored else None
-        self._write({"active": active, "profiles": [self._dump(p) for p in stored]})
+        self._write({"active": active, "profiles": [dump_profile(p) for p in stored]})
         logger.info("Runner profile deleted: id=%s", profile_id)
 
     def activate(self, profile_id: str) -> None:
@@ -162,7 +140,7 @@ class ProfileStore:
         self._write(
             {
                 "active": profile_id,
-                "profiles": [self._dump(p) for p in self.list()],
+                "profiles": [dump_profile(p) for p in self.list()],
             }
         )
         logger.info("Runner profile activated: id=%s", profile_id)
@@ -177,46 +155,51 @@ class ProfileStore:
             id=LEGACY_PROFILE_ID,
             name="默认连接（旧版迁移）",
             type=behavior.runner,
-            base_url=connection.base_url,
-            model=connection.model,
-            api_key=connection.api_key,
-            streaming=connection.streaming,
-            timeout_seconds=connection.timeout_seconds,
-            temperature=connection.temperature,
+            model_id=LEGACY_MODEL_ID,
             bot_id=behavior.coze_bot_id,
         )
 
     def _read(self) -> dict | None:
-        """读取档案文件；不存在返回 None，损坏时备份后按不存在处理。"""
-        try:
-            with self._path.open(encoding="utf-8-sig") as file:
-                data = json.load(file)
-            if not isinstance(data, dict):
-                raise ValueError("runner profiles must be an object")
+        data = super()._read()
+        if data is None:
+            return None
+        profiles = data.get("profiles", [])
+        if not any("base_url" in item for item in profiles if isinstance(item, dict)):
             return data
-        except FileNotFoundError:
-            return None
-        except ValueError:
-            backup = self._path.with_suffix(f".broken-{time.time_ns()}.json")
-            self._path.rename(backup)
-            logger.warning("Runner profiles backed up to %s", backup)
-            return None
+        return self._migrate_inline_connections(data, profiles)
 
-    def _write(self, data: dict) -> None:
-        """原子写入：先写临时文件再替换，避免中途断电留下半个文件。"""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self._path.with_name(f"{self._path.stem}.{time.time_ns()}.tmp")
-        try:
-            with temporary.open("x", encoding="utf-8") as file:
-                json.dump(data, file, ensure_ascii=False, indent=2)
-                file.write("\n")
-            temporary.replace(self._path)
-        finally:
-            temporary.unlink(missing_ok=True)
-
-    @staticmethod
-    def _dump(profile: RunnerProfile) -> dict:
-        """序列化为存储字典；model_dump 会遮蔽密钥，需显式取回真实值。"""
-        data = profile.model_dump()
-        data["api_key"] = profile.api_key.get_secret_value()
-        return data
+    def _migrate_inline_connections(self, data: dict, profiles: list) -> dict:
+        """拆分旧版内联连接为模型连接档案 + 引用，并落盘为新格式。"""
+        migrated = []
+        for item in profiles:
+            if not isinstance(item, dict) or "base_url" not in item:
+                migrated.append(item)
+                continue
+            model = ModelProfile(
+                name=f"{item.get('name', '未命名')} 的连接",
+                base_url=item["base_url"],
+                model=item.get("model", ""),
+                api_key=item.get("api_key", ""),
+                streaming=item.get("streaming", True),
+                timeout_seconds=item.get("timeout_seconds", 60),
+                temperature=item.get("temperature", 0.7),
+            )
+            self._model_store.create(model)
+            migrated.append(
+                {
+                    "id": item["id"],
+                    "name": item.get("name", "未命名"),
+                    "type": item.get("type", "langchain"),
+                    "model_id": model.id,
+                    "bot_id": item.get("bot_id", ""),
+                }
+            )
+        result = {"active": data.get("active"), "profiles": migrated}
+        self._write(result)
+        logger.info(
+            "Runner profiles migrated: %d inline connections moved to model profiles",
+            sum(
+                1 for item in profiles if isinstance(item, dict) and "base_url" in item
+            ),
+        )
+        return result

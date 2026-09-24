@@ -1,7 +1,6 @@
 """Runner 档案的增删查改与启用切换。
 
-密钥安全：响应只回 has_api_key，永不回显真实密钥；
-更新时 api_key 留空表示保持不变。
+档案只保存引擎类型与模型连接引用（model_id），连接信息在模型页面维护。
 """
 
 from typing import Literal
@@ -10,24 +9,19 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from anyagent.api.routes.settings import ensure_same_origin
-from anyagent.configs.profiles import ProfileStore, RunnerProfile
+from anyagent.configs.profiles import MODEL_REQUIRED_TYPES, ProfileStore, RunnerProfile
 from anyagent.core.domain.chat import ChatError
 
 router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
 
 
 class ProfileInput(BaseModel):
-    """创建/更新档案的输入；更新时 api_key 留空表示保持不变。"""
+    """创建/更新档案的输入；model_id 必须指向已存在的模型连接。"""
 
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=40)
     type: Literal["langchain", "langgraph", "loop", "dify", "coze", "pi", "deerflow"]
-    base_url: str
-    model: str = ""
-    api_key: str = ""
-    streaming: bool = Field(default=True, strict=True)
-    timeout_seconds: int = Field(default=60, ge=1, le=600, strict=True)
-    temperature: float = Field(default=0.7, ge=0, le=2)
+    model_id: str = Field(min_length=1)
     bot_id: str = ""
 
 
@@ -35,25 +29,27 @@ def store(request: Request) -> ProfileStore:
     return request.app.state.profile_store
 
 
-def public(profile: RunnerProfile, active_id: str | None) -> dict:
-    """档案的公开视图：不含真实密钥。"""
+def public(profile: RunnerProfile, active_id: str | None, request: Request) -> dict:
+    """档案的公开视图：附带引用的模型连接摘要，供前端展示。"""
+    model = None
+    try:
+        resolved = request.app.state.model_store.get(profile.model_id)
+        model = {"id": resolved.id, "name": resolved.name, "model": resolved.model}
+    except ChatError:
+        model = None
     return {
         "id": profile.id,
         "name": profile.name,
         "type": profile.type,
-        "base_url": profile.base_url,
-        "model": profile.model,
-        "streaming": profile.streaming,
-        "timeout_seconds": profile.timeout_seconds,
-        "temperature": profile.temperature,
+        "model_id": profile.model_id,
+        "model": model,
         "bot_id": profile.bot_id,
-        "has_api_key": bool(profile.api_key.get_secret_value()),
         "active": profile.id == active_id,
     }
 
 
 def validation_error(error: ValidationError) -> HTTPException:
-    """校验失败返回 422；只提取字段与信息，不回显提交内容（含密钥）。"""
+    """校验失败返回 422；只提取字段与信息，不回显提交内容。"""
     first = error.errors()[0]
     field = ".".join(str(part) for part in first["loc"])
     message = first["msg"].removeprefix("Value error, ")
@@ -66,13 +62,33 @@ def not_found(error: ChatError) -> HTTPException:
     return HTTPException(404, detail={"code": error.code, "message": error.message})
 
 
+def check_model_reference(body: ProfileInput, request: Request) -> None:
+    """引用的模型连接必须存在；本地编排类引擎还要求其填写了模型名称。"""
+    try:
+        model = request.app.state.model_store.get(body.model_id)
+    except ChatError:
+        raise HTTPException(
+            422, detail={"code": "model_missing", "message": "所选模型连接不存在"}
+        ) from None
+    if body.type in MODEL_REQUIRED_TYPES and not model.model.strip():
+        raise HTTPException(
+            422,
+            detail={
+                "code": "model_incomplete",
+                "message": "该引擎要求所选模型填写模型名称，请先在模型页面补全",
+            },
+        )
+
+
 @router.get("")
 async def list_profiles(request: Request) -> dict:
     profile_store = store(request)
     active_id = profile_store.active_id()
     return {
         "active": active_id,
-        "profiles": [public(profile, active_id) for profile in profile_store.list()],
+        "profiles": [
+            public(profile, active_id, request) for profile in profile_store.list()
+        ],
     }
 
 
@@ -80,14 +96,13 @@ async def list_profiles(request: Request) -> dict:
 async def create_profile(body: ProfileInput, request: Request) -> dict:
     ensure_same_origin(request)
     try:
-        profile = RunnerProfile(
-            **body.model_dump(exclude={"api_key"}), api_key=body.api_key
-        )
+        profile = RunnerProfile(**body.model_dump())
     except ValidationError as error:
         raise validation_error(error) from None
+    check_model_reference(body, request)
     profile_store = store(request)
     profile_store.create(profile)
-    return public(profile, profile_store.active_id())
+    return public(profile, profile_store.active_id(), request)
 
 
 @router.put("/{profile_id}")
@@ -98,18 +113,13 @@ async def update_profile(profile_id: str, body: ProfileInput, request: Request) 
         existing = profile_store.get(profile_id)
     except ChatError as error:
         raise not_found(error) from None
-    # 留空保持原密钥；填写则替换
-    api_key = body.api_key or existing.api_key.get_secret_value()
     try:
-        profile = RunnerProfile(
-            **body.model_dump(exclude={"api_key"}),
-            id=existing.id,
-            api_key=api_key,
-        )
+        profile = RunnerProfile(**body.model_dump(), id=existing.id)
     except ValidationError as error:
         raise validation_error(error) from None
+    check_model_reference(body, request)
     profile_store.update(profile)
-    return public(profile, profile_store.active_id())
+    return public(profile, profile_store.active_id(), request)
 
 
 @router.delete("/{profile_id}", status_code=204)

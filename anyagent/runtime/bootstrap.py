@@ -24,7 +24,8 @@ from anyagent.configs import (
 )
 from anyagent.configs.agent import LangChainSettings
 from anyagent.configs.management import ConfigurationManager
-from anyagent.configs.profiles import ProfileStore, RunnerProfile
+from anyagent.configs.model_profiles import ModelProfile, ModelProfileStore
+from anyagent.configs.profiles import MODEL_REQUIRED_TYPES, ProfileStore, RunnerProfile
 from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import AgentRunner, RunnerFactory
 from anyagent.core.services.chat import ChatService
@@ -32,6 +33,7 @@ from anyagent.infrastructure.openai.client import OpenAIClient
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.runtime.restart import RestartController
 from anyagent.tools import build_tool_set
+from anyagent.utils.logbroker import broker as log_broker
 from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,14 +42,34 @@ logger = get_logger(__name__)
 TESTABLE_TYPES = ("langchain", "langgraph", "loop", "pi")
 
 
+def _resolve_model(
+    profile: RunnerProfile, model_store: ModelProfileStore
+) -> ModelProfile:
+    """解析 Runner 引用的模型连接；引用失效或信息不全时给出可操作的提示。"""
+    try:
+        model = model_store.get(profile.model_id)
+    except ChatError:
+        raise ChatError(
+            "model_missing",
+            "该 Runner 引用的模型连接已被删除，请在 Runner 页面重新选择",
+        ) from None
+    if profile.type in MODEL_REQUIRED_TYPES and not model.model.strip():
+        raise ChatError(
+            "model_incomplete", "该模型连接未填写模型名称，请在模型页面补全"
+        )
+    return model
+
+
 def _runner_for(
     profile: RunnerProfile,
+    model: ModelProfile,
     settings: LangChainSettings,
     tool_set,
 ) -> RunnerFactory:
-    """按档案类型构建对应 runner；档案即连接，互不共享状态。"""
-    model_loader = lambda: profile.as_model_settings()  # noqa: E731
-    client_loader = lambda: OpenAIClient(profile.as_model_settings())  # noqa: E731
+    """按档案类型构建对应 runner；连接信息来自引用的模型连接。"""
+    # 远端平台引擎不填模型名，用引擎类型占位满足连接配置的校验
+    model_loader = lambda: model.as_model_settings(profile.type)  # noqa: E731
+    client_loader = lambda: OpenAIClient(model.as_model_settings(profile.type))  # noqa: E731
     match profile.type:
         case "langgraph":
             factory = LangGraphRunnerFactory(
@@ -78,8 +100,15 @@ def _runner_for(
 class ProfileRunnerFactory:
     """每次创建时读取活动档案并按其类型委托对应工厂，支撑热切换。"""
 
-    def __init__(self, store: ProfileStore, settings: LangChainSettings, tool_set):
+    def __init__(
+        self,
+        store: ProfileStore,
+        model_store: ModelProfileStore,
+        settings: LangChainSettings,
+        tool_set,
+    ):
         self._store = store
+        self._model_store = model_store
         self._settings = settings
         self._tool_set = tool_set
 
@@ -90,7 +119,8 @@ class ProfileRunnerFactory:
                 "model_not_configured",
                 "请先在 Runner 页面创建并启用一个 Runner",
             )
-        factory = _runner_for(profile, self._settings, self._tool_set)
+        model = _resolve_model(profile, self._model_store)
+        factory = _runner_for(profile, model, self._settings, self._tool_set)
         return await factory.create()
 
 
@@ -102,6 +132,8 @@ def create_app(
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        log_broker.attach_loop(asyncio.get_running_loop())
+        app.state.log_broker = log_broker
         config.paths.data_dir.mkdir(parents=True, exist_ok=True)
         app.state.data_dir = config.paths.data_dir
         app.state.config = config
@@ -109,12 +141,14 @@ def create_app(
         load_model_config()
         load_frontend_config()
         app.state.configuration_manager = ConfigurationManager()
-        profile_store = ProfileStore()
+        model_store = ModelProfileStore()
+        app.state.model_store = model_store
+        profile_store = ProfileStore(model_store=model_store)
         app.state.profile_store = profile_store
         tool_set = build_tool_set()
         app.state.tool_set = tool_set
         factory = runner_factory or ProfileRunnerFactory(
-            profile_store, settings, tool_set
+            profile_store, model_store, settings, tool_set
         )
         database = load_database_config()
         repository = SQLiteSessionRepository(
@@ -163,7 +197,8 @@ def create_app(
                             "unsupported",
                             "该平台引擎由服务端托管，无需连接测试",
                         )
-                    client = OpenAIClient(profile.as_model_settings())
+                    model = _resolve_model(profile, model_store)
+                    client = OpenAIClient(model.as_model_settings(profile.type))
                     try:
                         await client.test()
                     finally:
@@ -173,6 +208,12 @@ def create_app(
 
             def agent_info() -> dict:
                 profile = profile_store.active()
+                model = None
+                if profile is not None:
+                    try:
+                        model = _resolve_model(profile, model_store)
+                    except ChatError:
+                        model = None
                 return {
                     "runner": profile.type if profile else None,
                     "profile": (
@@ -184,10 +225,13 @@ def create_app(
                         if profile
                         else None
                     ),
-                    "configured": profile is not None,
-                    "model": profile.model if profile else "",
-                    "base_url": profile.base_url if profile else "",
-                    "streaming": profile.streaming if profile else False,
+                    "model_profile": (
+                        {"id": model.id, "name": model.name} if model else None
+                    ),
+                    "configured": profile is not None and model is not None,
+                    "model": model.model if model else "",
+                    "base_url": model.base_url if model else "",
+                    "streaming": model.streaming if model else False,
                     "limits": {"max_input_chars": settings.max_input_chars},
                     "frontend": load_frontend_config().model_dump(),
                     "storage": "sqlite",
@@ -203,6 +247,7 @@ def create_app(
             finally:
                 app.state.ready = False
                 await app.state.chat_service.shutdown()
+                log_broker.detach_loop()
                 logger.info("Application shutdown complete")
 
     app = build_app(lifespan=lifespan)
