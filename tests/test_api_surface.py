@@ -90,14 +90,17 @@ def test_runners_listing(runtime_paths):
             assert isinstance(runner["tools"], bool)
             assert runner["label"] and runner["description"]
         # 启用档案后 current 反映档案类型
-        profile = client.post(
-            "/api/v1/profiles",
+        model = client.post(
+            "/api/v1/models",
             json={
-                "name": "测试 Dify",
-                "type": "dify",
+                "name": "测试连接",
                 "base_url": "https://api.dify.ai/v1",
                 "api_key": "app-test",
             },
+        ).json()
+        profile = client.post(
+            "/api/v1/profiles",
+            json={"name": "测试 Dify", "type": "dify", "model_id": model["id"]},
         ).json()
         client.post(f"/api/v1/profiles/{profile['id']}/activate")
         assert client.get("/api/v1/runners").json()["current"] == "dify"

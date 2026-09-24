@@ -46,6 +46,8 @@ ERROR_STATUS = {
     "capacity_exceeded": 429,
     "session_limit": 429,
     "model_not_configured": 503,
+    "model_missing": 503,
+    "model_incomplete": 503,
     "run_timeout": 504,
     "storage_unavailable": 503,
 }
