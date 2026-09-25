@@ -1,30 +1,50 @@
-/* 设置页：深色侧边栏沿用 .sidebar 基础样式，这里补充分类导航与表单布局 */
+/* 设置页：分类导航为主区内的 pill 按钮，表单沿用分组卡片布局 */
 
-.settings-sidebar {
-  width: 240px;
+.settings-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
-.settings-sidebar .nav-item {
-  border: 0;
-  background: transparent;
-  width: 100%;
-  text-align: left;
+.settings-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 550;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
-.settings-sidebar .nav-item .pending-badge {
-  margin-left: auto;
+.settings-pill:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.settings-pill.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.settings-pill:disabled {
+  opacity: 0.55;
+}
+
+.settings-pill .pending-badge {
   font-size: 11px;
   font-weight: 500;
-  color: #fbbf24;
-}
-
-.settings-caption {
-  padding: 10px 10px 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--sidebar-text-secondary);
+  color: var(--warning);
 }
 
 .settings-main {

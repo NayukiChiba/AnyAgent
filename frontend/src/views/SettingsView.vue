@@ -176,121 +176,101 @@ onBeforeRouteLeave(() => !working.value && discardAllowed())
 </script>
 
 <template>
-  <div class="workspace settings-workspace">
-    <aside class="sidebar settings-sidebar">
-      <RouterLink class="brand" to="/" aria-label="AnyAgent 首页"
-        ><span class="brand-mark">A</span>AnyAgent</RouterLink
+  <main class="main settings-main">
+    <header class="topbar">
+      <div class="topbar-title">
+        <div>
+          <span class="eyebrow">ANYAGENT SETTINGS</span>
+          <h1>设置</h1>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-sm" :disabled="loading || working" @click="reload">重新载入</button>
+      </div>
+    </header>
+    <nav class="settings-pills" aria-label="设置分类">
+      <button
+        v-for="item in navigationItems"
+        :key="item.name"
+        class="settings-pill"
+        :class="{ active: item.name === selected }"
+        :disabled="working"
+        @click="selectGroup(item.name)"
       >
-      <RouterLink to="/" class="nav-item">← 返回聊天</RouterLink>
-      <div class="settings-caption">设置分类</div>
-      <nav class="sidebar-nav" aria-label="设置分类">
-        <button
-          v-for="item in navigationItems"
-          :key="item.name"
-          class="nav-item"
-          :class="{ active: item.name === selected }"
-          :disabled="working"
-          @click="selectGroup(item.name)"
-        >
-          {{ item.title }}<span v-if="item.restart_required" class="pending-badge">待重启</span>
-        </button>
-      </nav>
-      <div class="sidebar-footer">
-        <RouterLink to="/runners" class="nav-item">Runner 管理</RouterLink>
-        <p class="sidebar-note">设置保存在本机，重新打开网页也不会丢失。</p>
+        {{ item.title }}<span v-if="item.restart_required" class="pending-badge">待重启</span>
+      </button>
+    </nav>
+    <div v-if="dirty" class="settings-dirty-banner" role="status">已修改配置，请点击保存</div>
+    <div class="settings-content">
+      <p v-if="loading" role="status">正在载入设置…</p>
+      <div
+        v-if="notice"
+        class="settings-notice"
+        :class="{ error: failed }"
+        :role="failed ? 'alert' : 'status'"
+      >
+        {{ notice }}
       </div>
-    </aside>
-
-    <main class="main settings-main">
-      <header class="topbar">
-        <div class="topbar-title">
-          <div>
-            <span class="eyebrow">ANYAGENT SETTINGS</span>
-            <h1>设置</h1>
-          </div>
-        </div>
-        <div class="topbar-actions">
-          <button class="btn btn-sm" :disabled="loading || working" @click="reload">
-            重新载入
-          </button>
-        </div>
-      </header>
-      <div v-if="dirty" class="settings-dirty-banner" role="status">已修改配置，请点击保存</div>
-      <div class="settings-content">
-        <p v-if="loading" role="status">正在载入设置…</p>
-        <div
-          v-if="notice"
-          class="settings-notice"
-          :class="{ error: failed }"
-          :role="failed ? 'alert' : 'status'"
-        >
-          {{ notice }}
-        </div>
-        <form v-if="visibleGroups.length && !loading" novalidate @submit.prevent="save">
-          <h2 v-if="selected === SYSTEM_PAGE" class="system-page-title">系统设置</h2>
-          <p v-if="selected === SYSTEM_PAGE" class="system-page-intro restart-required-notice">
-            <b>需要重启服务</b>这里的设置会改变服务运行方式，保存后统一重启服务生效。
-            <strong v-if="restartPending">当前有已保存的设置等待重启。</strong>
-          </p>
-          <section v-for="item in visibleGroups" :key="item.name" class="settings-group-card">
-            <div class="group-heading">
-              <div>
-                <h2>{{ item.title }}</h2>
-                <span v-if="isGroupDirty(item)" class="change-state unsaved">未保存</span>
-              </div>
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm group-default"
-                :disabled="working"
-                @click="defaults(item)"
-              >
-                恢复{{ item.title }}默认值
-              </button>
+      <form v-if="visibleGroups.length && !loading" novalidate @submit.prevent="save">
+        <h2 v-if="selected === SYSTEM_PAGE" class="system-page-title">系统设置</h2>
+        <p v-if="selected === SYSTEM_PAGE" class="system-page-intro restart-required-notice">
+          <b>需要重启服务</b>这里的设置会改变服务运行方式，保存后统一重启服务生效。
+          <strong v-if="restartPending">当前有已保存的设置等待重启。</strong>
+        </p>
+        <section v-for="item in visibleGroups" :key="item.name" class="settings-group-card">
+          <div class="group-heading">
+            <div>
+              <h2>{{ item.title }}</h2>
+              <span v-if="isGroupDirty(item)" class="change-state unsaved">未保存</span>
             </div>
-            <p class="group-description">{{ item.description }}</p>
-            <p v-if="selected !== SYSTEM_PAGE" class="apply-notice hot-reload-notice">
-              <b>热更新</b>{{ item.apply_notice }}
-            </p>
-            <SettingField
-              v-for="field in item.fields"
-              :key="`${item.name}-${field.path}`"
-              v-model="forms[item.name][field.path]"
-              :field="field"
-              :id-prefix="item.name"
-              :error="errors[item.name]?.[field.path]"
-              :disabled="working"
-            />
-          </section>
-          <div class="settings-action-dock" aria-label="设置操作">
-            <span class="action-summary">
-              {{
-                dirty
-                  ? `${dirtyGroups.length} 组修改尚未保存`
-                  : restartPending
-                    ? '已保存修改等待重启'
-                    : '设置已同步'
-              }}
-            </span>
-            <button type="button" class="btn btn-sm" :disabled="working || !dirty" @click="undo">
-              撤销修改
-            </button>
             <button
-              type="submit"
-              class="btn btn-primary save-settings"
-              :disabled="working || !dirty"
+              type="button"
+              class="btn btn-ghost btn-sm group-default"
+              :disabled="working"
+              @click="defaults(item)"
             >
-              {{ saving ? '正在保存…' : '保存设置' }}
+              恢复{{ item.title }}默认值
             </button>
-            <RestartControl
-              v-if="frontendPreferences"
-              :preferences="frontendPreferences"
-              :disabled="saving || dirty"
-              :pending="restartPending"
-              @busy="restarting = $event"
-            />
           </div>
-        </form>
-      </div>
-    </main>
-  </div>
+          <p class="group-description">{{ item.description }}</p>
+          <p v-if="selected !== SYSTEM_PAGE" class="apply-notice hot-reload-notice">
+            <b>热更新</b>{{ item.apply_notice }}
+          </p>
+          <SettingField
+            v-for="field in item.fields"
+            :key="`${item.name}-${field.path}`"
+            v-model="forms[item.name][field.path]"
+            :field="field"
+            :id-prefix="item.name"
+            :error="errors[item.name]?.[field.path]"
+            :disabled="working"
+          />
+        </section>
+        <div class="settings-action-dock" aria-label="设置操作">
+          <span class="action-summary">
+            {{
+              dirty
+                ? `${dirtyGroups.length} 组修改尚未保存`
+                : restartPending
+                  ? '已保存修改等待重启'
+                  : '设置已同步'
+            }}
+          </span>
+          <button type="button" class="btn btn-sm" :disabled="working || !dirty" @click="undo">
+            撤销修改
+          </button>
+          <button type="submit" class="btn btn-primary save-settings" :disabled="working || !dirty">
+            {{ saving ? '正在保存…' : '保存设置' }}
+          </button>
+          <RestartControl
+            v-if="frontendPreferences"
+            :preferences="frontendPreferences"
+            :disabled="saving || dirty"
+            :pending="restartPending"
+            @busy="restarting = $event"
+          />
+        </div>
+      </form>
+    </div>
+  </main>
 </template>

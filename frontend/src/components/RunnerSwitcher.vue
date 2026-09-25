@@ -86,10 +86,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
         <span class="type-badge" :data-type="active.type">{{ active.type }}</span>
         <span class="runner-name"
           >{{ active.name
-          }}<span class="runner-sub"
-            >{{ active.base_url.replace(/^https?:\/\//, '')
-            }}<template v-if="active.model"> · {{ active.model }}</template></span
-          ></span
+          }}<span class="runner-sub">{{
+            active.model
+              ? active.model.name + (active.model.model ? ` · ${active.model.model}` : '')
+              : '模型连接缺失'
+          }}</span></span
         >
       </template>
       <span v-else class="runner-name empty">{{ switching ? '正在切换…' : '未启用 Runner' }}</span>
