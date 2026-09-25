@@ -26,6 +26,15 @@ export const activateProfile = (id) =>
 export const testActiveProfile = () =>
   request('/api/v1/settings/model_config/test', { method: 'POST' })
 
+/* 模型连接：集中维护地址与密钥，供 Runner 引用 */
+export const listModels = () => request('/api/v1/models')
+export const createModel = (values) =>
+  request('/api/v1/models', { method: 'POST', body: JSON.stringify(values) })
+export const updateModel = (id, values) =>
+  request(`/api/v1/models/${id}`, { method: 'PUT', body: JSON.stringify(values) })
+export const deleteModel = (id) => request(`/api/v1/models/${id}`, { method: 'DELETE' })
+export const testModel = (id) => request(`/api/v1/models/${id}/test`, { method: 'POST' })
+
 export function createEventParser(onEvent) {
   let pending = ''
   return {

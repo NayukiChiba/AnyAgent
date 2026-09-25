@@ -1,0 +1,9 @@
+/* 模型连接页：补充 Runner 卡片之外的引用提示样式 */
+
+.model-refs {
+  color: var(--accent);
+}
+
+.form-warning {
+  color: var(--warning);
+}

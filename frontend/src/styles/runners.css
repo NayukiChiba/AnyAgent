@@ -76,6 +76,11 @@
   white-space: nowrap;
 }
 
+.runner-card-warning {
+  color: var(--warning);
+  font-family: var(--font-sans);
+}
+
 .runner-card-actions {
   display: flex;
   flex-wrap: wrap;
