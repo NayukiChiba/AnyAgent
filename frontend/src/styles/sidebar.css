@@ -1,0 +1,41 @@
+/* 统一侧边栏：会话/管理双模式切换 */
+
+.mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  background: var(--sidebar-surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius);
+}
+
+.mode-toggle button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--sidebar-text-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.mode-toggle button:hover {
+  color: var(--sidebar-text);
+}
+
+.mode-toggle button.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #fff;
+}
+
+.manage-nav {
+  flex: 1;
+}
