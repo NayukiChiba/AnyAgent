@@ -6,8 +6,9 @@ from tempfile import TemporaryDirectory
 
 import uvicorn
 
-from anyagent.configs import paths
+from anyagent.configs import load_logging_config, paths
 from anyagent.runtime.bootstrap import create_app
+from anyagent.utils.logger import LogManager
 from tests.model_fixture import open_model_endpoint
 
 
@@ -26,6 +27,8 @@ def main():
         paths.LOGS_DIR = paths.DATA_DIR / "logs"
         paths.LEGACY_CONFIG_FILE = paths.DATA_DIR / "config.json"
         paths.get_configs_dir().mkdir(parents=True)
+        # 与正式入口一致：配置日志后实时日志接口才有内容
+        LogManager.configure(load_logging_config())
         paths.get_config_path("model_config").write_text(
             json.dumps(
                 {
