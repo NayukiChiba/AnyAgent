@@ -23,7 +23,15 @@ test('configuration groups render with validation, dirty guards and restart feed
     // 默认展示网页偏好；模型连接与执行引擎已由 Runner 管理接管
     await expect(page.getByRole('heading', { name: '网页偏好' })).toBeVisible()
     await expect(page.getByRole('button', { name: '模型连接' })).toHaveCount(0)
-    await expect(page.locator('.settings-sidebar')).toHaveCSS('background-color', 'rgb(16, 16, 20)')
+    // 统一侧栏在管理页展示管理导航，分类导航为主区内的 pill 按钮
+    const sidebar = page.locator('.sidebar')
+    await expect(sidebar).toHaveCSS('background-color', 'rgb(16, 16, 20)')
+    await expect(sidebar.getByRole('tab', { name: '管理' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(sidebar.getByRole('link', { name: '设置', exact: true })).toHaveClass(/active/)
+    await expect(page.locator('.settings-pills')).toBeVisible()
     await expect(page.locator('.hot-reload-notice')).toHaveCSS(
       'background-color',
       'rgb(255, 251, 235)',
@@ -105,15 +113,21 @@ test('saving webpage preferences hot reloads an open chat view', async ({
   }
 })
 
-test('sidebar navigation and outlined controls support keyboard and mobile layout', async ({
-  page,
-}) => {
+test('unified sidebar switches between session and management modes', async ({ page }) => {
   await page.goto('/')
-  const sidebar = page.locator('.sidebar-footer')
-  await expect(sidebar.getByRole('link', { name: '设置', exact: true })).toBeVisible()
+  const sidebar = page.locator('.sidebar')
+  // 对话页默认会话模式：会话列表与新建按钮可见
+  await expect(sidebar.getByRole('tab', { name: '会话' })).toHaveAttribute('aria-selected', 'true')
+  await expect(sidebar.getByRole('button', { name: '新建会话' })).toBeVisible()
+  // 切到管理模式：跳转 Runner 页并展示管理导航
+  await sidebar.getByRole('tab', { name: '管理' }).click()
+  await expect(page).toHaveURL(/\/runners$/)
+  for (const name of ['Runner 管理', '模型', '日志', '设置'])
+    await expect(sidebar.getByRole('link', { name, exact: true })).toBeVisible()
   await sidebar.getByRole('link', { name: '设置', exact: true }).click()
   await expect(page).toHaveURL(/\/settings$/)
   await page.screenshot({ path: '/tmp/anyagent-settings-desktop.png', fullPage: true })
+  // 下拉控件键盘操作
   const select = page.getByRole('combobox', { name: '默认连接方式', exact: true })
   await select.focus()
   await select.press('ArrowDown')
@@ -127,12 +141,13 @@ test('sidebar navigation and outlined controls support keyboard and mobile layou
   await select.press('Enter')
   await expect(select).toHaveText('HTTP（SSE）')
   await page.getByRole('button', { name: '撤销修改' }).click()
+  // 移动端布局
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: '/tmp/anyagent-settings-mobile.png', fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.getByRole('link', { name: '返回聊天' }).click()
-  await expect(
-    page.locator('.sidebar-footer').getByRole('link', { name: '设置', exact: true }),
-  ).toBeVisible()
+  // 切回会话模式返回对话页
+  await sidebar.getByRole('tab', { name: '会话' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(sidebar.getByRole('button', { name: '新建会话' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
