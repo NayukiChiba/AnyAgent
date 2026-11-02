@@ -10,7 +10,13 @@ import pytest
 from anyagent.configs import LoggingSettings, paths
 from anyagent.core.domain.chat import Message, Session
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
-from anyagent.utils.logger import AnyAgentLogger, LogManager, get_logger, logger
+from anyagent.utils.logger import (
+    AnyAgentLogger,
+    LogManager,
+    get_logger,
+    log_context,
+    logger,
+)
 
 
 @pytest.fixture
@@ -60,7 +66,8 @@ def test_log_rotation_limits_retained_files(log_settings):
         logger.info("Record %s: %s", index, "x" * 200)
     LogManager.shutdown()
 
-    files = list(settings.file_path.parent.glob("test.log*"))
+    # loguru 轮转文件名为 test.<时间戳>.log，与当前文件一并计数
+    files = list(settings.file_path.parent.glob("test*.log"))
     assert len(files) == 3
     assert "Record 19:" in settings.file_path.read_text(encoding="utf-8")
 
@@ -236,6 +243,30 @@ def test_business_payloads_are_logged_fully_with_nested_credentials_redacted(
     assert json.loads(recorded["content"])["answer"] == "普通工具结果"
     assert recorded["plain_json"] == original["plain_json"]
     assert payload == original
+
+
+def test_log_context_tags_records_and_restores_after_block(log_settings):
+    LogManager.configure(log_settings)
+    logger.info("Before context")
+    with log_context(run="r-123", session="s-1"):
+        logger.info("Inside context")
+        # 内层只覆盖同名字段，其余字段沿用外层
+        with log_context(run="r-456"):
+            logger.info("Nested context")
+    logger.info("After context")
+    LogManager.shutdown()
+
+    lines = log_settings.file_path.read_text(encoding="utf-8").splitlines()
+    by_message = {
+        message: line
+        for message in ("Before", "Inside", "Nested", "After")
+        for line in lines
+        if f"{message} context" in line
+    }
+    assert "[run=" not in by_message["Before"]
+    assert "[run=r-123 session=s-1]" in by_message["Inside"]
+    assert "[run=r-456 session=s-1]" in by_message["Nested"]
+    assert "[run=" not in by_message["After"]
 
 
 def test_unserializable_payload_does_not_interrupt_logging(log_settings):

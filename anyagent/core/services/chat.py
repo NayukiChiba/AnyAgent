@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
 from anyagent.core.ports.chat import AgentRunner, RunnerFactory, SessionRepository
-from anyagent.utils.logger import get_logger
+from anyagent.utils.logger import get_logger, log_context
 
 logger = get_logger(__name__)
 
@@ -186,110 +186,93 @@ class ChatService:
         started = perf_counter()
         tool_calls = 0
         completed = False
-        logger.info("Agent run started: session=%s", run_id)
-        try:
-            logger.debug(
-                "Agent context loaded: session=%s messages=%d",
-                run_id,
-                len(messages),
-            )
-            async with asyncio.timeout(self.timeout_seconds):
-                runner = await self.runners.create()
-                logger.debug("Agent runner created: session=%s", run_id)
-                result = None
-                output_size = 0
-                async with aclosing(runner.stream(messages)) as events:
-                    async for event in events:
-                        if event.type == "tool_call":
-                            tool_calls += 1
-                            self._stats["tool_calls"] += 1
-                            logger.debug(
-                                "Agent tool call received: session=%s count=%d",
-                                run_id,
-                                tool_calls,
-                            )
-                        if event.type == "result":
-                            result = event.data.get("content")
-                        else:
-                            output_size += len(str(event.data))
-                            if output_size > self.max_event_chars:
-                                raise ChatError(
-                                    "output_limit", "模型输出超过单次执行限制"
-                                )
-                            if event.type == "tool_call":
-                                logger.info(
-                                    "Agent tool call: session=%s data=%s",
-                                    run_id,
-                                    event.data,
-                                )
-                            elif event.type == "tool_result":
-                                logger.info(
-                                    "Agent tool result: session=%s data=%s",
-                                    run_id,
-                                    event.data,
-                                )
-                            yield event
-                if not isinstance(result, str) or not result.strip():
-                    raise ChatError("runner_failed", "模型未返回有效回复")
-                if len(result) > self.max_output_chars:
-                    raise ChatError("output_limit", "模型回复超过长度限制")
-                completed = True
-                self._stats["runs_completed"] += 1
-                logger.info(
-                    "Agent run completed: session=%s elapsed_ms=%.0f output_chars=%d tool_calls=%d",
-                    run_id,
-                    (perf_counter() - started) * 1000,
-                    len(result),
-                    tool_calls,
-                )
-                yield Event("result", {"content": result})
-        except asyncio.CancelledError:
-            if not completed:
-                self._stats["runs_cancelled"] += 1
-                logger.info(
-                    "Agent run cancelled: session=%s elapsed_ms=%.0f",
-                    run_id,
-                    (perf_counter() - started) * 1000,
-                )
-            raise
-        except GeneratorExit:
-            if not completed:
-                self._stats["runs_cancelled"] += 1
-                logger.info(
-                    "Agent stream closed: session=%s elapsed_ms=%.0f",
-                    run_id,
-                    (perf_counter() - started) * 1000,
-                )
-            raise
-        except TimeoutError as exc:
-            self._stats["runs_failed"] += 1
-            logger.warning(
-                "Agent run timed out: session=%s timeout_seconds=%s",
-                run_id,
-                self.timeout_seconds,
-            )
-            raise ChatError("run_timeout", "执行超时，请稍后重试") from exc
-        except ChatError as exc:
-            self._stats["runs_failed"] += 1
-            logger.warning("Agent run failed: session=%s code=%s", run_id, exc.code)
-            raise
-        except Exception as exc:
-            self._stats["runs_failed"] += 1
-            # SDK exception text may include upstream response bodies or credentials.
-            logger.warning(
-                "Agent execution failed: session=%s error=%s",
-                run_id,
-                type(exc).__name__,
-            )
-            raise ChatError(
-                "runner_failed", "模型执行失败，请检查模型配置和服务状态"
-            ) from exc
-        finally:
+        # run 标识进入日志上下文，本 run 链路（含 runner/工具层）日志自动携带
+        with log_context(run=run_id):
+            logger.info("Agent run started")
             try:
-                if runner is not None:
-                    await self._dispose(runner)
+                logger.debug("Agent context loaded: messages=%d", len(messages))
+                async with asyncio.timeout(self.timeout_seconds):
+                    runner = await self.runners.create()
+                    logger.debug("Agent runner created")
+                    result = None
+                    output_size = 0
+                    async with aclosing(runner.stream(messages)) as events:
+                        async for event in events:
+                            if event.type == "tool_call":
+                                tool_calls += 1
+                                self._stats["tool_calls"] += 1
+                                logger.debug(
+                                    "Agent tool call received: count=%d",
+                                    tool_calls,
+                                )
+                            if event.type == "result":
+                                result = event.data.get("content")
+                            else:
+                                output_size += len(str(event.data))
+                                if output_size > self.max_event_chars:
+                                    raise ChatError(
+                                        "output_limit", "模型输出超过单次执行限制"
+                                    )
+                                if event.type == "tool_call":
+                                    logger.info("Agent tool call: data=%s", event.data)
+                                elif event.type == "tool_result":
+                                    logger.info(
+                                        "Agent tool result: data=%s", event.data
+                                    )
+                                yield event
+                    if not isinstance(result, str) or not result.strip():
+                        raise ChatError("runner_failed", "模型未返回有效回复")
+                    if len(result) > self.max_output_chars:
+                        raise ChatError("output_limit", "模型回复超过长度限制")
+                    completed = True
+                    self._stats["runs_completed"] += 1
+                    logger.info(
+                        "Agent run completed: elapsed_ms=%.0f output_chars=%d tool_calls=%d",
+                        (perf_counter() - started) * 1000,
+                        len(result),
+                        tool_calls,
+                    )
+                    yield Event("result", {"content": result})
+            except asyncio.CancelledError:
+                if not completed:
+                    self._stats["runs_cancelled"] += 1
+                    logger.info(
+                        "Agent run cancelled: elapsed_ms=%.0f",
+                        (perf_counter() - started) * 1000,
+                    )
+                raise
+            except GeneratorExit:
+                if not completed:
+                    self._stats["runs_cancelled"] += 1
+                    logger.info(
+                        "Agent stream closed: elapsed_ms=%.0f",
+                        (perf_counter() - started) * 1000,
+                    )
+                raise
+            except TimeoutError as exc:
+                self._stats["runs_failed"] += 1
+                logger.warning(
+                    "Agent run timed out: timeout_seconds=%s",
+                    self.timeout_seconds,
+                )
+                raise ChatError("run_timeout", "执行超时，请稍后重试") from exc
+            except ChatError as exc:
+                self._stats["runs_failed"] += 1
+                logger.warning("Agent run failed: code=%s", exc.code)
+                raise
+            except Exception as exc:
+                self._stats["runs_failed"] += 1
+                # SDK exception text may include upstream response bodies or credentials.
+                logger.warning("Agent execution failed: error=%s", type(exc).__name__)
+                raise ChatError(
+                    "runner_failed", "模型执行失败，请检查模型配置和服务状态"
+                ) from exc
             finally:
-                self._active.pop(run_id, None)
+                try:
+                    if runner is not None:
+                        await self._dispose(runner)
+                finally:
+                    self._active.pop(run_id, None)
 
     async def _dispose(self, runner: AgentRunner) -> None:
         async def close():

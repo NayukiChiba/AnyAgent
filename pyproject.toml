@@ -12,10 +12,10 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "logging".msg = "使用 anyagent.utils.logger 的 AnyAgentLogger；原生 logging 仅限内部兼容实现。"
+"loguru".msg = "使用 anyagent.utils.logger 的 AnyAgentLogger；loguru 仅限 logger.py 内部作为 sink 引擎。"
 
 [tool.ruff.lint.per-file-ignores]
 "anyagent/utils/logger.py" = ["TID251"]
-"anyagent/utils/logbroker.py" = ["TID251"]
 "tests/test_logger.py" = ["TID251"]
 
 [tool.ruff.format]
@@ -71,6 +71,7 @@ dependencies = [
     "langchain-openai>=1.0,<2.0",
     "langgraph>=1.2.11,<1.3.0",
     "langgraph-checkpoint-sqlite>=3.1.1",
+    "loguru>=0.7,<1.0",
     "openai>=2.0,<4.0",
     "psutil>=7.0,<8.0",
     "pydantic>=2.0,<3.0",
