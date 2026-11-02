@@ -32,7 +32,7 @@
 .log-console {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   padding: 12px 14px;
   border-radius: var(--radius);
   background: #0d0d12;
@@ -51,8 +51,10 @@
   display: flex;
   gap: 10px;
   margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* 时间/级别/模块列不收缩，消息列收缩换行 */
+  width: max-content;
+  min-width: 100%;
+  white-space: nowrap;
 }
 
 .log-time {
@@ -85,14 +87,19 @@
 
 .log-logger {
   flex: none;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: #a78bfa;
 }
 
+.log-context {
+  color: #34d399;
+  margin-right: 6px;
+}
+
 .log-message {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 auto;
   color: #d4d4d8;
+  /* 换行优先取自然断点，长令牌（URL、标识符）才在字符间断开 */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }

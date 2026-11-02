@@ -100,7 +100,10 @@ onBeforeUnmount(() => source?.close())
           <span class="log-time">{{ formatTime(entry.time) }}</span>
           <span class="log-level" :data-level="entry.level">{{ entry.level }}</span>
           <span class="log-logger">{{ entry.logger }}</span>
-          <span class="log-message">{{ entry.message }}</span>
+          <span class="log-message"
+            ><span v-if="entry.context" class="log-context">[{{ entry.context }}]</span
+            >{{ entry.message }}</span
+          >
         </p>
       </div>
     </div>
