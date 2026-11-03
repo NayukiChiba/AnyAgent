@@ -392,16 +392,6 @@
   color: var(--text-tertiary);
 }
 
-.transport-picker {
-  width: 132px;
-  flex: none;
-}
-
-.transport-picker .select-trigger {
-  padding: 6px 10px;
-  font-size: 12.5px;
-}
-
 .eyebrow {
   display: block;
   font-size: 11px;

@@ -4,7 +4,6 @@ import { onBeforeRouteLeave } from 'vue-router'
 import SettingField from '../components/SettingField.vue'
 import RestartControl from '../components/RestartControl.vue'
 import { request } from '../api.js'
-import { announceFrontendConfig } from '../configSync.js'
 import '../styles/settings.css'
 
 const SYSTEM_PAGE = 'system'
@@ -142,7 +141,6 @@ async function save() {
           body: JSON.stringify({ values, revision: item.revision }),
         })
         replaceGroup(result)
-        if (result.name === 'frontend_config') announceFrontendConfig(result.revision)
         savedCount++
       } catch (error) {
         failed.value = true

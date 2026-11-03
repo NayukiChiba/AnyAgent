@@ -1,9 +1,8 @@
 <script setup>
 import { onBeforeRouteLeave } from 'vue-router'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import SettingSelect from '../components/SettingSelect.vue'
 import MarkdownMessage from '../components/MarkdownMessage.vue'
-import { request, streamHttp, streamWebSocket } from '../api.js'
+import { cancelRun, createRun, followRun, request } from '../api.js'
 import {
   createSession,
   loadSessions,
@@ -12,11 +11,9 @@ import {
   sessionState,
 } from '../stores/sessions.js'
 import { agent, loadAgent } from '../stores/agent.js'
-import { FRONTEND_CONFIG_REVISION_KEY } from '../configSync.js'
 
 const messages = ref([])
 const input = ref('')
-const transport = ref('')
 const loading = ref(true)
 const notice = ref('')
 const tools = ref([])
@@ -26,6 +23,7 @@ const renameValue = ref('')
 const renameSaving = ref(false)
 const renameInput = ref(null)
 let controller
+let activeRunId = ''
 let loadSeq = 0
 const busy = computed({
   get: () => sessionState.busy,
@@ -45,10 +43,9 @@ async function scrollToEnd() {
   await nextTick()
   if (thread.value) thread.value.scrollTop = thread.value.scrollHeight
 }
-async function refreshAgent({ syncTransport = false } = {}) {
+async function refreshAgent() {
   try {
     await loadAgent()
-    if (syncTransport || !transport.value) transport.value = agent.value.frontend.default_transport
   } catch (error) {
     notice.value = error.message
   }
@@ -112,16 +109,17 @@ async function send() {
   notice.value = ''
   tools.value = []
   input.value = ''
-  controller = new AbortController()
   const assistantIndex = messages.value.length + 1
   messages.value.push({ role: 'user', content }, { role: 'assistant', content: '' })
   await scrollToEnd()
   try {
     await refreshAgent()
-    const stream = transport.value === 'websocket' ? streamWebSocket : streamHttp
-    await stream(
-      currentId.value,
-      content,
+    // 创建 Run 后订阅其事件流；断线由 followRun 按序号续订
+    const run = await createRun(currentId.value, content)
+    controller = new AbortController()
+    activeRunId = run.id
+    await followRun(
+      run.id,
       (event) => {
         if (event.type === 'delta') messages.value[assistantIndex].content += event.data.content
         if (event.type === 'result') messages.value[assistantIndex].content = event.data.content
@@ -133,12 +131,12 @@ async function send() {
         scrollToEnd()
       },
       controller.signal,
-      { cancelTimeoutMs: agent.value.frontend.cancel_timeout_ms },
     )
   } catch (error) {
     notice.value = error.name === 'AbortError' ? '已停止生成，本轮未写入会话历史。' : error.message
   } finally {
     controller = null
+    activeRunId = ''
     try {
       const session = await request(`/api/v1/sessions/${currentId.value}`)
       messages.value = session.messages
@@ -152,6 +150,8 @@ async function send() {
   }
 }
 function stop() {
+  // 先请求服务端取消（历史不提交），再中断本地订阅
+  if (activeRunId) cancelRun(activeRunId).catch(() => {})
   controller?.abort()
 }
 function handleKey(event) {
@@ -160,13 +160,9 @@ function handleKey(event) {
     send()
   }
 }
-function handleConfigStorage(event) {
-  if (event.key === FRONTEND_CONFIG_REVISION_KEY) refreshAgent({ syncTransport: true })
-}
 onMounted(async () => {
-  window.addEventListener('storage', handleConfigStorage)
   try {
-    await refreshAgent({ syncTransport: true })
+    await refreshAgent()
     await loadSessions()
     if (sessionState.currentId) await loadMessages(sessionState.currentId)
     else if (sessionState.list.length) sessionState.currentId = sessionState.list[0].id
@@ -179,7 +175,6 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   stop()
-  window.removeEventListener('storage', handleConfigStorage)
 })
 onBeforeRouteLeave(
   () => !busy.value || window.confirm('回复仍在生成，离开页面将停止生成。确定离开吗？'),
@@ -229,18 +224,6 @@ onBeforeRouteLeave(
         <span v-if="agent?.configured" class="badge">{{
           agent.streaming ? '流式输出' : '非流式输出'
         }}</span>
-        <span id="transport-label" class="picker-label">连接方式</span>
-        <SettingSelect
-          id="transport"
-          v-model="transport"
-          class="transport-picker"
-          :disabled="busy"
-          labelledby="transport-label"
-          :choices="[
-            { value: 'websocket', label: 'WebSocket' },
-            { value: 'http', label: 'HTTP · SSE' },
-          ]"
-        />
         <button
           class="btn btn-sm"
           :disabled="busy || !currentId"

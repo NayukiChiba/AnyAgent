@@ -65,16 +65,15 @@ test('configuration groups render with validation, dirty guards and restart feed
     // 恢复默认值：先把网页偏好改为非默认值并保存，恢复默认后才产生可撤销的修改
     await page.getByRole('button', { name: '网页偏好', exact: true }).click()
     await expect(page.getByRole('heading', { name: '网页偏好', exact: true })).toBeVisible()
-    await page.getByRole('combobox', { name: '默认连接方式' }).click()
-    await page.getByRole('option', { name: 'HTTP（SSE）', exact: true }).click()
+    await page.getByLabel('重启状态检查间隔（毫秒）').fill('2000')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('设置已保存')
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: '恢复网页偏好默认值' }).click()
-    await expect(page.getByRole('combobox', { name: '默认连接方式' })).toHaveText('WebSocket')
+    await expect(page.getByLabel('重启状态检查间隔（毫秒）')).toHaveValue('1000')
     await expect(page.getByText('已修改配置，请点击保存')).toBeVisible()
     await page.getByRole('button', { name: '撤销修改' }).click()
-    await expect(page.getByRole('combobox', { name: '默认连接方式' })).toHaveText('HTTP（SSE）')
+    await expect(page.getByLabel('重启状态检查间隔（毫秒）')).toHaveValue('2000')
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(errors).toEqual([])
@@ -82,34 +81,8 @@ test('configuration groups render with validation, dirty guards and restart feed
     await restore(request, original)
     const frontend = await savedGroup(request, 'frontend_config')
     await request.put('/api/v1/settings/frontend_config', {
-      data: { revision: frontend.revision, values: { default_transport: 'websocket' } },
+      data: { revision: frontend.revision, values: { restart_poll_interval_ms: 1000 } },
     })
-  }
-})
-
-test('saving webpage preferences hot reloads an open chat view', async ({
-  page,
-  context,
-  request,
-}) => {
-  const original = await savedGroup(request, 'frontend_config')
-  const nextTransport = original.values.default_transport === 'websocket' ? 'http' : 'websocket'
-  const nextLabel = nextTransport === 'http' ? 'HTTP（SSE）' : 'WebSocket'
-  const expectedChatLabel = nextTransport === 'http' ? 'HTTP · SSE' : 'WebSocket'
-  const settingsPage = await context.newPage()
-  try {
-    await page.goto('/')
-    await settingsPage.goto('/settings')
-    await settingsPage.getByRole('button', { name: '网页偏好', exact: true }).click()
-    await expect(settingsPage.locator('.hot-reload-notice')).toContainText('不需要重启服务')
-    await settingsPage.getByLabel('默认连接方式').click()
-    await settingsPage.getByRole('option', { name: nextLabel, exact: true }).click()
-    await settingsPage.getByRole('button', { name: '保存设置', exact: true }).click()
-    await expect(settingsPage.getByRole('status')).toContainText('设置已保存')
-    await expect(page.getByLabel('连接方式')).toHaveText(expectedChatLabel)
-  } finally {
-    await settingsPage.close()
-    await restore(request, original)
   }
 })
 
@@ -127,19 +100,20 @@ test('unified sidebar switches between session and management modes', async ({ p
   await sidebar.getByRole('link', { name: '设置', exact: true }).click()
   await expect(page).toHaveURL(/\/settings$/)
   await page.screenshot({ path: '/tmp/anyagent-settings-desktop.png', fullPage: true })
-  // 下拉控件键盘操作
-  const select = page.getByRole('combobox', { name: '默认连接方式', exact: true })
+  // 下拉控件键盘操作（系统设置分类的日志组）
+  await page.getByRole('button', { name: '系统设置', exact: true }).click()
+  const select = page.getByRole('combobox', { name: '日志详细程度', exact: true })
   await select.focus()
   await select.press('ArrowDown')
   await expect(select).toHaveAttribute('aria-expanded', 'true')
   await page.screenshot({ path: '/tmp/anyagent-settings-dropdown.png', fullPage: true })
   await select.press('ArrowDown')
   await select.press('Escape')
-  await expect(select).toHaveText('WebSocket')
+  await expect(select).toHaveText('INFO')
   await select.press('ArrowDown')
   await select.press('End')
   await select.press('Enter')
-  await expect(select).toHaveText('HTTP（SSE）')
+  await expect(select).toHaveText('CRITICAL')
   await page.getByRole('button', { name: '撤销修改' }).click()
   // 移动端布局
   await page.setViewportSize({ width: 390, height: 844 })

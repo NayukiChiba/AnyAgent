@@ -264,7 +264,7 @@ def create_app(
                     "limits": {"max_input_chars": settings.max_input_chars},
                     "frontend": load_frontend_config().model_dump(),
                     "storage": "sqlite",
-                    "transports": ["http", "websocket", "sse"],
+                    "transports": ["http", "sse"],
                     "tools": [t.name for t in tool_set.tools],
                 }
 

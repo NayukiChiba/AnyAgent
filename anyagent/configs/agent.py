@@ -1,6 +1,5 @@
 """Independent model connection and LangChain application settings."""
 
-from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -116,16 +115,6 @@ class LangChainSettings(BaseSettings):
 
 
 class FrontendSettings(BaseSettings):
-    default_transport: Literal["websocket", "http"] = DEFAULT_FRONTEND_CONFIG[
-        "default_transport"
-    ]
-    cancel_timeout_ms: int = Field(
-        default=DEFAULT_FRONTEND_CONFIG["cancel_timeout_ms"],
-        ge=100,
-        le=30000,
-        strict=True,
-    )
-
     restart_poll_interval_ms: int = Field(
         default=DEFAULT_FRONTEND_CONFIG["restart_poll_interval_ms"],
         ge=250,
