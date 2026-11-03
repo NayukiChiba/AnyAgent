@@ -1,5 +1,6 @@
 """Persist complete bounded session snapshots with short SQLite transactions."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -10,7 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from anyagent.core.domain.chat import ChatError, Message, Session
-from anyagent.infrastructure.sqlite.models import Base, SessionRecord
+from anyagent.infrastructure.sqlite.migrate import migrate_database
+from anyagent.infrastructure.sqlite.models import SessionRecord
 from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,11 +32,12 @@ class SQLiteSessionRepository:
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def initialize(self) -> None:
-        """Create missing tables; existing or unreadable data is never reset."""
+        """Migrate the schema to the latest version; existing data is never reset."""
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        # 迁移是同步阻塞操作，交给线程执行避免卡住事件循环
+        await asyncio.to_thread(migrate_database, self.file_path)
         async with self.engine.begin() as connection:
             await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
-            await connection.run_sync(Base.metadata.create_all)
 
     async def aclose(self) -> None:
         await self.engine.dispose()

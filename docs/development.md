@@ -35,11 +35,11 @@ utils 不存放业务策略。包入口不创建数据库、Manager 或网络任
 
 ## SQLite 仓储
 
-`SQLiteSessionRepository` 实现既有 SessionRepository 端口，core 不导入 ORM。runtime 在 lifespan 中连接、创建缺失表，服务 shutdown 完成后关闭引擎；初始化失败同样关闭引擎，不回退到空库。每次仓储操作创建独立 AsyncSession，事务不跨越模型调用。
+`SQLiteSessionRepository` 实现既有 SessionRepository 端口，core 不导入 ORM。runtime 在 lifespan 中执行数据库迁移并连接，服务 shutdown 完成后关闭引擎；初始化失败同样关闭引擎，不回退到空库。每次仓储操作创建独立 AsyncSession，事务不跨越模型调用。
 
 当前表以单行 JSON 列保存完整的有序消息快照，与标题一起原子提交；历史仍受 max_history_messages 窗口限制。写事务先取得 SQLite 写锁，再检查会话容量或更新记录，数据库错误转换为不含 SQL 参数的 storage_unavailable。运行状态与并发保护仍属于单进程内存，数据库文件不代表执行断点恢复或多进程业务协调。
 
-首次版本使用 create_all 创建缺失表；后续已有表结构变更必须设计并验收迁移，create_all 不会升级已有列。tests/test_sqlite_sessions.py 覆盖重新连接、跨应用实例恢复、删除、并发容量、事务回滚、取消和损坏数据库保护。运行测试使用临时数据目录，避免写入开发者会话。
+表结构由 Alembic 版本化迁移管理：迁移脚本在 `migrations/versions/`，启动时由 `infrastructure/sqlite/migrate.py` 编程式驱动（无 alembic.ini），空库执行 upgrade 建表、create_all 时代的存量库先 stamp 到初始版本再增量升级。非空库迁移前自动备份到 `data/` 内的时间戳副本，迁移失败从备份恢复并抛错，不留半成品。schema 变更必须新增迁移脚本并同步 `models.py`，不修改已发布的迁移文件。tests/test_sqlite_sessions.py 覆盖重新连接、跨应用实例恢复、删除、并发容量、事务回滚、取消和损坏数据库保护；tests/test_migrate.py 覆盖新库建表、存量库接管、幂等升级与失败恢复。运行测试使用临时数据目录，避免写入开发者会话。
 
 ## Vue 3 前端开发
 

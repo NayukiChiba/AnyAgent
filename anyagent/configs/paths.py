@@ -3,7 +3,11 @@
 import re
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# 源码安装位置：测试可 patch PROJECT_ROOT 作为部署根别名做 data 隔离，
+# 但迁移脚本等源码资产必须始终指向真实安装位置
+_SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+PROJECT_ROOT = _SOURCE_ROOT
 DATA_DIR = PROJECT_ROOT / "data"
 CONFIGS_DIR = DATA_DIR / "configs"
 LOGS_DIR = DATA_DIR / "logs"
@@ -13,6 +17,23 @@ LEGACY_CONFIG_FILE = DATA_DIR / "config.json"
 def get_main_path() -> Path:
     """Return the absolute entrypoint for process replacement."""
     return get_project_root() / "main.py"
+
+
+def get_migrations_dir() -> Path:
+    """Return the Alembic migration scripts directory (a source asset).
+
+    迁移脚本随源码安装，不随部署根（PROJECT_ROOT）的测试隔离而变化。
+    """
+    return _SOURCE_ROOT / "migrations"
+
+
+def get_database_backup_path(path: Path, timestamp: int) -> Path:
+    """Build a pre-migration database backup filename next to the database.
+
+    备份必须与数据库同目录以保证恢复语义；边界已由数据库路径自身的
+    get_database_path 校验继承，此处不再重复校验。
+    """
+    return path.with_name(f"{path.name}.{timestamp}.bak")
 
 
 def get_frontend_dir() -> Path:

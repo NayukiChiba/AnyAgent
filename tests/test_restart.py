@@ -106,6 +106,8 @@ def test_main_replaces_process_reloads_settings_and_preserves_cli(
         tmp_path / "anyagent",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
+    # 迁移脚本是运行必需的源码资产，随项目根一起复制
+    shutil.copytree(runtime_paths / "migrations", tmp_path / "migrations")
     shutil.copy(runtime_paths / "main.py", tmp_path / "main.py")
     config_dir = tmp_path / "data/configs"
     config_dir.mkdir(parents=True)
