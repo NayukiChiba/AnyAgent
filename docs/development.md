@@ -39,7 +39,7 @@ utils 不存放业务策略。包入口不创建数据库、Manager 或网络任
 
 当前表以单行 JSON 列保存完整的有序消息快照，与标题一起原子提交；历史仍受 max_history_messages 窗口限制。写事务先取得 SQLite 写锁，再检查会话容量或更新记录，数据库错误转换为不含 SQL 参数的 storage_unavailable。运行状态与并发保护仍属于单进程内存，数据库文件不代表执行断点恢复或多进程业务协调。
 
-表结构由 Alembic 版本化迁移管理：迁移脚本在 `migrations/versions/`，启动时由 `infrastructure/sqlite/migrate.py` 编程式驱动（无 alembic.ini），空库执行 upgrade 建表、create_all 时代的存量库先 stamp 到初始版本再增量升级。非空库迁移前自动备份到 `data/` 内的时间戳副本，迁移失败从备份恢复并抛错，不留半成品。schema 变更必须新增迁移脚本并同步 `models.py`，不修改已发布的迁移文件。tests/test_sqlite_sessions.py 覆盖重新连接、跨应用实例恢复、删除、并发容量、事务回滚、取消和损坏数据库保护；tests/test_migrate.py 覆盖新库建表、存量库接管、幂等升级与失败恢复。运行测试使用临时数据目录，避免写入开发者会话。
+表结构由 Alembic 版本化迁移管理：迁移脚本在 `migrations/versions/`，启动时由 `infrastructure/sqlite/migrate.py` 编程式驱动（无 alembic.ini），空库执行 upgrade 建表、create_all 时代的存量库先 stamp 到初始版本再增量升级，版本已与 head 一致时不备份、不执行迁移。有待执行的迁移且数据库非空时，先备份到 `data/` 内的时间戳副本，迁移失败从备份恢复并抛错，不留半成品。schema 变更必须新增迁移脚本并同步 `models.py`，不修改已发布的迁移文件。tests/test_sqlite_sessions.py 覆盖重新连接、跨应用实例恢复、删除、并发容量、事务回滚、取消和损坏数据库保护；tests/test_migrate.py 覆盖新库建表、存量库接管、幂等升级与失败恢复。运行测试使用临时数据目录，避免写入开发者会话。
 
 ## Vue 3 前端开发
 

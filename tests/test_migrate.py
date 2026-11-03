@@ -32,6 +32,19 @@ def _revision(path):
     return {row[0] for row in rows}
 
 
+def _create_legacy_database(path):
+    """构造 create_all 时代的存量库：有业务表、无 alembic_version。"""
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE anyagent_chat_sessions ("
+            "sequence INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "session_id VARCHAR(32) UNIQUE NOT NULL, "
+            "title VARCHAR(255) NOT NULL, "
+            "created_at VARCHAR(40) NOT NULL, "
+            "messages JSON NOT NULL)"
+        )
+
+
 def _insert_session(path, session_id):
     with sqlite3.connect(path) as connection:
         connection.execute(
@@ -57,15 +70,7 @@ def test_fresh_database_migrates_to_head(db_path):
 
 def test_legacy_create_all_database_is_stamped_without_data_loss(db_path):
     """create_all 时代的存量库：schema 不变、数据保留、只补登版本。"""
-    with sqlite3.connect(db_path) as connection:
-        connection.execute(
-            "CREATE TABLE anyagent_chat_sessions ("
-            "sequence INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "session_id VARCHAR(32) UNIQUE NOT NULL, "
-            "title VARCHAR(255) NOT NULL, "
-            "created_at VARCHAR(40) NOT NULL, "
-            "messages JSON NOT NULL)"
-        )
+    _create_legacy_database(db_path)
     _insert_session(db_path, "legacy-1")
 
     migrate_database(db_path)
@@ -84,7 +89,7 @@ def test_migration_is_idempotent(db_path):
 
 def test_failed_migration_restores_backup(db_path, monkeypatch):
     """迁移中途失败：从备份恢复，已有数据不丢，备份文件保留备查。"""
-    migrate_database(db_path)
+    _create_legacy_database(db_path)
     _insert_session(db_path, "safe-1")
     original = db_path.read_bytes()
 
@@ -99,6 +104,21 @@ def test_failed_migration_restores_backup(db_path, monkeypatch):
     backups = list(db_path.parent.glob("test.db.*.bak"))
     assert len(backups) == 1
     assert backups[0].read_bytes() == original
+
+
+def test_up_to_date_database_skips_backup_and_upgrade(db_path, monkeypatch):
+    """版本已与 head 一致：不产生备份，也不执行迁移命令。"""
+    migrate_database(db_path)
+    _insert_session(db_path, "keep-1")
+
+    def boom(config, revision):
+        raise RuntimeError("不应执行升级")
+
+    monkeypatch.setattr("anyagent.infrastructure.sqlite.migrate.command.upgrade", boom)
+    migrate_database(db_path)
+
+    assert _fetch_session(db_path, "keep-1") == ("标题",)
+    assert list(db_path.parent.glob("test.db.*.bak")) == []
 
 
 def test_failed_fresh_migration_leaves_no_partial_file(db_path, monkeypatch):

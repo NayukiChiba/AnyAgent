@@ -4,10 +4,11 @@
 - 空库执行 upgrade 建表并记录版本；
 - 存量库（有业务表但无 alembic_version，即 create_all 时代的数据）
   先 stamp 到初始版本再 upgrade，schema 不重复创建；
-- 版本库执行增量 upgrade。
+- 版本库执行增量 upgrade；版本已与 head 一致时直接返回，
+  不备份、不执行迁移，避免每次启动都生成备份副本。
 
-非空库在迁移前备份（先 WAL checkpoint 再复制），任何一步失败
-从备份恢复并向调用方抛错，保证迁移失败不破坏已有数据。
+有待执行的迁移动作且数据库非空时，先备份（WAL checkpoint 后复制），
+任何一步失败从备份恢复并向调用方抛错，保证迁移失败不破坏已有数据。
 """
 
 from __future__ import annotations
@@ -19,7 +20,8 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from alembic.script import ScriptDirectory
+from sqlalchemy import create_engine, inspect, text
 
 from anyagent.configs import paths
 from anyagent.utils.logger import get_logger
@@ -40,15 +42,22 @@ def _build_config(file_path: Path) -> Config:
     return config
 
 
-def _inspect_state(file_path: Path) -> tuple[bool, bool]:
-    """返回（是否有业务表，是否有版本表）；数据库文件不存在时均为 False。"""
+def _inspect_state(file_path: Path) -> tuple[bool, str | None]:
+    """返回（是否有业务表，当前迁移版本）；库不存在或无版本表时版本为 None。"""
     if not file_path.exists():
-        return False, False
+        return False, None
     engine = create_engine(f"sqlite:///{file_path.as_posix()}")
     try:
         tables = set(inspect(engine).get_table_names())
         has_user_tables = bool(tables - {"alembic_version"})
-        return has_user_tables, "alembic_version" in tables
+        current = None
+        if "alembic_version" in tables:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).fetchone()
+            current = row[0] if row else None
+        return has_user_tables, current
     finally:
         engine.dispose()
 
@@ -74,20 +83,29 @@ def _restore_backup(backup: Path, file_path: Path) -> None:
 def migrate_database(file_path: Path) -> None:
     """把数据库迁移到最新版本。
 
+    版本已与 head 一致时直接返回（不备份、不执行迁移）；只有存在
+    实际迁移动作（存量库补登版本或版本落后）且数据库非空时才备份。
+
     Args:
         file_path: 已校验的 SQLite 数据库绝对路径。
 
     Raises:
         Exception: 迁移失败；非空库已从备份恢复到迁移前状态。
     """
-    has_user_tables, has_version_table = _inspect_state(file_path)
+    has_user_tables, current = _inspect_state(file_path)
+    config = _build_config(file_path)
+    head = ScriptDirectory.from_config(config).get_current_head()
+    # 存量库（有业务表、无版本记录）需要先 stamp 补登版本
+    needs_stamp = has_user_tables and current is None
+    if not needs_stamp and current == head:
+        logger.info("数据库表结构已是最新: %s", file_path.name)
+        return
     backup = None
     # 只对已有数据的库做备份；空库升级失败直接删除文件即可
     if file_path.exists() and file_path.stat().st_size > 0:
         backup = _backup_database(file_path)
-    config = _build_config(file_path)
     try:
-        if has_user_tables and not has_version_table:
+        if needs_stamp:
             # 接管 create_all 时代的存量库：schema 已与初始迁移一致，只登记版本
             command.stamp(config, INITIAL_REVISION)
             logger.info(
@@ -104,4 +122,4 @@ def migrate_database(file_path: Path) -> None:
             # 空库升级失败不留半成品
             file_path.unlink()
         raise
-    logger.info("数据库表结构已是最新: %s", file_path.name)
+    logger.info("数据库迁移完成: %s（当前版本 %s）", file_path.name, head)
