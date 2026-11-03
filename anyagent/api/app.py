@@ -13,6 +13,7 @@ from anyagent.api.routes.models import router as models_router
 from anyagent.api.routes.observability import router as observability_router
 from anyagent.api.routes.openai_compat import router as openai_router
 from anyagent.api.routes.profiles import router as profiles_router
+from anyagent.api.routes.runs import router as runs_router
 from anyagent.api.routes.settings import router as settings_router
 from anyagent.api.routes.system import router as system_router
 
@@ -36,4 +37,5 @@ def build_app(
     app.include_router(openai_router)
     app.include_router(profiles_router)
     app.include_router(models_router)
+    app.include_router(runs_router)
     return app

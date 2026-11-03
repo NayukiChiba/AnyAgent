@@ -57,6 +57,11 @@ class ChatService:
         return self._runs.stats
 
     @property
+    def runs(self) -> RunService:
+        """Run 执行服务（Run API 等新接口直接使用；会话端点仍走本外观）。"""
+        return self._runs
+
+    @property
     def _active(self) -> dict:
         """兼容既有诊断与测试：执行中的任务表。"""
         return self._runs._active
