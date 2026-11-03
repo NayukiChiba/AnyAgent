@@ -1,6 +1,6 @@
 # LangChain Agent
 
-当前版本使用 LangChain 官方 `create_agent` 和 `ChatOpenAI`，提供多轮对话和一个计算工具。前端为 Vue 3，接口为普通 HTTP、HTTP 上的 SSE 流，以及 WebSocket。会话通过 SQLAlchemy 异步仓储保存到本机 SQLite，重启后恢复标题与已完成的历史窗口。
+当前版本使用 LangChain 官方 `create_agent` 和 `ChatOpenAI`，提供多轮对话和一个计算工具。前端为 Vue 3，接口为普通 HTTP 与 HTTP 上的 SSE 流（[Run API](./runs.md)）。会话通过 SQLAlchemy 异步仓储保存到本机 SQLite，重启后恢复标题与已完成的历史窗口。
 
 ## Markdown 回复
 
@@ -30,7 +30,7 @@ Agent 回复支持标题、加粗、斜体、删除线、列表、引用、表�
 
 支持自定义 OpenAI 兼容模型地址、名称和密钥。服务需支持标准 Chat Completions 和工具调用，开启流式输出时还需支持流式响应。地址填接口前缀，SDK 自动追加 `/chat/completions`。无认证本地服务填写占位密钥 `local`。
 
-`streaming: true` 为流式模型调用，会产生 `delta` 文本增量；`false` 为上游非流式模型调用，收到完整模型回复后输出最终结果，不发送 `delta`。两种模式仍提供工具调用与结果。开关独立于 HTTP/SSE 和 WebSocket 连接方式：通过 SSE/WebSocket 使用非流式模型时，工具步骤仍可作为事件发送，最终文本完整发送。
+`streaming: true` 为流式模型调用，会产生 `delta` 文本增量；`false` 为上游非流式模型调用，收到完整模型回复后输出最终结果，不发送 `delta`。两种模式仍提供工具调用与结果。开关独立于对外连接方式：使用非流式模型时，工具步骤仍可作为事件发送，最终文本完整发送。
 
 `max_retries` 控制 SDK 重试次数，默认为 0；`stream_usage` 默认为 false，仅在服务支持流式用量信息时开启。
 
@@ -67,12 +67,12 @@ Agent 回复支持标题、加粗、斜体、删除线、列表、引用、表�
 
 ```json
 {
-  "default_transport": "websocket",
-  "cancel_timeout_ms": 1500
+  "restart_poll_interval_ms": 1000,
+  "restart_wait_timeout_seconds": 60
 }
 ```
 
-`default_transport` 支持 `websocket` 和 `http`，决定页面默认连接方式；`cancel_timeout_ms` 控制 WebSocket 取消确认等待时间。网页保存后会通知已打开的聊天页立即同步默认连接；手动修改 JSON 后可点击“刷新配置”重新读取。
+两项分别控制网页等待服务重启时的状态检查间隔与等待上限，通常保持默认；修改后在下一次重启流程生效。
 
 ## 使用工作台
 
@@ -80,10 +80,9 @@ Agent 回复支持标题、加粗、斜体、删除线、列表、引用、表�
 
 1. 打开“设置”，填写模型连接信息，保存并测试后返回聊天。
 2. 输入“请使用工具计算 2+3”，观察工具参数、工具结果和最终回复。修改模型配置的 `streaming` 可以切换流式和非流式输出。
-3. 在“连接方式”切换 WebSocket 或 HTTP · SSE。
-4. 使用“新建会话”、会话列表和“删除会话”管理本机会话；“停止生成”取消当前轮次。
+3. 使用“新建会话”、会话列表和“删除会话”管理本机会话；“停止生成”取消当前执行。
 
-只有成功执行的用户消息与完整回复写入历史。失败、超时或取消不会留下半轮对话；刷新页面或重启服务后仍能读取已保存的历史窗口。工具过程展示属于本轮临时状态，刷新后不恢复。
+只有成功执行的用户消息与完整回复写入历史。失败、超时或取消不会留下半轮对话；刷新页面或重启服务后仍能读取已保存的历史窗口。网络中断时页面按事件序号自动续订，进行中的回复不丢失。工具过程展示属于本轮临时状态，刷新后不恢复。
 
 ## 调用接口
 
@@ -99,13 +98,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/sessions
 curl -X POST http://127.0.0.1:8000/api/v1/sessions/<id>/messages \
   -H 'Content-Type: application/json' \
   -d '{"content":"请使用工具计算 2+3"}'
-
-curl -N -X POST http://127.0.0.1:8000/api/v1/sessions/<id>/stream \
-  -H 'Content-Type: application/json' \
-  -d '{"content":"请使用工具计算 2+3"}'
 ```
 
-普通 HTTP 返回 `content` 和 `events`。SSE 响应的 `data` 与 WebSocket JSON 共用事件结构：
+普通 HTTP 返回 `content` 和 `events`。事件结构：
 
 ```json
 {"type":"tool_call","data":{"id":"call_1","name":"calculate","arguments":{"operation":"add","a":2,"b":3}}}
@@ -114,20 +109,14 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/sessions/<id>/stream \
 {"type":"result","data":{"session_id":"...","content":"结果是 5"}}
 ```
 
-`result` 是完整结果，用于替换增量显示，避免重复拼接。错误事件为 `{"type":"error","data":{"code":"...","message":"..."}}`。SSE 已建立后不能改 HTTP 状态码，执行错误通过该事件返回。
+`result` 是完整结果，用于替换增量显示，避免重复拼接。错误事件为 `{"type":"error","data":{"code":"...","message":"..."}}`。
 
-连接 `ws://127.0.0.1:8000/ws/sessions/<id>`，发送：
-
-```json
-{"type":"message","content":"请使用工具计算 2+3"}
-```
-
-取消发送 `{"type":"cancel"}`，完成后收到 `{"type":"cancelled","data":{}}`。HTTP 流取消通过断开该请求实现。两种连接断开都会结束其执行，本轮不支持后台 Run、断线续跑或事件重放。
+实时订阅、断线续传与取消通过 [Run API](./runs.md) 完成：创建 Run 后执行与订阅解耦，订阅断开不停止执行。
 
 同一会话有执行中的请求时，其他请求收到 `session_busy`。普通 HTTP 使用 409、503、504 等状态码报告会话冲突、模型未配置和超时。完整接口见服务的 `/docs`。
 
 ## 验证范围
 
-自动测试通过本地确定性 OpenAI 兼容协议夹具调用真实 LangChain SDK，覆盖工具循环、历史、热重载和三种接口；Vue 浏览器测试覆盖首次配置、分类设置、错误输入、未保存提醒、连接测试、输出模式、聊天、会话操作与取消。
+自动测试通过本地确定性 OpenAI 兼容协议夹具调用真实 LangChain SDK，覆盖工具循环、历史、热重载与接口；Runner 契约用例集同时施加到脚本驱动与内置 loop runner；Vue 浏览器测试覆盖首次配置、分类设置、错误输入、未保存提醒、连接测试、输出模式、聊天、断线续订、会话操作与取消。
 
-这些测试不调用云端模型。配置真实服务后仍需验证该模型的流式输出与工具调用能力。当前版本未实现生产鉴权、多进程会话共享、持久执行和执行断点恢复。
+这些测试不调用云端模型。配置真实服务后仍需验证该模型的流式输出与工具调用能力。当前版本未实现生产鉴权、多进程会话共享、后台 Run 和执行断点恢复。
