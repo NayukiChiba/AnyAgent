@@ -205,7 +205,7 @@ def test_run_logs_include_business_content_without_sdk_exception_text(caplog):
         await service.shutdown()
         return session.id
 
-    with caplog.at_level("DEBUG", logger="anyagent.core.services.chat"):
+    with caplog.at_level("DEBUG", logger="anyagent.core.services"):
         session_id = asyncio.run(check())
     content = caplog.text
     assert session_id in content
@@ -258,7 +258,7 @@ def test_tool_logs_include_parameters_results_and_survive_failed_runs(
             await collect(service, session.id)
         await service.shutdown()
 
-    with caplog.at_level("INFO", logger="anyagent.core.services.chat"):
+    with caplog.at_level("INFO", logger="anyagent.core.services"):
         asyncio.run(check())
     messages = [record.getMessage() for record in caplog.records]
     tool_call = next(message for message in messages if "Agent tool call:" in message)
@@ -306,10 +306,14 @@ def test_cancel_stops_active_run_and_rejects_idle_session():
             service.cancel(session.id)
         assert idle.value.code == "session_not_running"
         task = asyncio.create_task(collect(service, session.id))
-        await asyncio.sleep(0)
+        # 执行与订阅解耦后需确认 Runner 已启动，再验证取消语义
+        while not factory.next.seen:
+            await asyncio.sleep(0)
         service.cancel(session.id)
-        with pytest.raises(asyncio.CancelledError):
+        # 执行与订阅解耦后，显式取消经终态事件传达给订阅方
+        with pytest.raises(ChatError) as cancelled:
             await task
+        assert cancelled.value.code == "run_cancelled"
         assert factory.next.closed
         assert (await repository.get(session.id)).messages == ()
         assert service.stats["runs_cancelled"] == 1
@@ -337,7 +341,7 @@ def test_stats_track_run_lifecycle():
         task = asyncio.create_task(collect(service, session.id))
         await asyncio.sleep(0)
         service.cancel(session.id)
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(ChatError):
             await task
         stats = service.stats
         assert stats["runs_cancelled"] == 1

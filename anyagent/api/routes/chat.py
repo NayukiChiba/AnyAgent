@@ -50,6 +50,9 @@ ERROR_STATUS = {
     "model_incomplete": 503,
     "run_timeout": 504,
     "storage_unavailable": 503,
+    "run_not_found": 404,
+    "invalid_state": 409,
+    "run_cancelled": 409,
 }
 
 

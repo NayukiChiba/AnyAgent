@@ -112,6 +112,24 @@ class ProfileRunnerFactory:
         self._settings = settings
         self._tool_set = tool_set
 
+    def describe(self) -> dict:
+        """当前活动档案的配置快照（Run 记录用）；无活动档案时为空。"""
+        profile = self._store.active()
+        if profile is None:
+            return {}
+        snapshot = {
+            "profile_id": profile.id,
+            "profile_name": profile.name,
+            "profile_type": profile.type,
+        }
+        try:
+            model = _resolve_model(profile, self._model_store)
+        except ChatError:
+            return snapshot
+        snapshot["model_profile_id"] = model.id
+        snapshot["model"] = model.model
+        return snapshot
+
     async def create(self) -> AgentRunner:
         profile = self._store.active()
         if profile is None:

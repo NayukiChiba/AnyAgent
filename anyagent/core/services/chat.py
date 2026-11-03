@@ -1,16 +1,21 @@
-"""Coordinate bounded sessions and commit only successful conversation turns."""
+"""Coordinate bounded sessions and commit only successful conversation turns.
+
+ChatService 是 RunService 的兼容外观：既有会话端点内部经 Run 执行，
+订阅断开时主动请求取消，保持"断连即取消"的既有连接语义；
+RunService 本身不随订阅断开停止执行。
+"""
 
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import replace
 from datetime import UTC, datetime
-from time import perf_counter
 from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
-from anyagent.core.ports.chat import AgentRunner, RunnerFactory, SessionRepository
-from anyagent.utils.logger import get_logger, log_context
+from anyagent.core.ports.chat import RunnerFactory, SessionRepository
+from anyagent.core.services.run import RunService
+from anyagent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -30,29 +35,33 @@ class ChatService:
         cleanup_timeout_seconds: float,
     ):
         self.repository = repository
-        self.runners = runners
-        self.timeout_seconds = timeout_seconds
-        self.max_concurrent_runs = max_concurrent_runs
-        self.max_history_messages = max_history_messages // 2 * 2
         self.max_input_chars = max_input_chars
-        self.max_output_chars = max_output_chars
-        self.max_event_chars = max_event_chars
-        self.cleanup_timeout_seconds = cleanup_timeout_seconds
-        self._active: dict[str, asyncio.Task] = {}
-        self._closing: set[asyncio.Task] = set()
-        # 运行统计：内存计数，重启清零
-        self._stats = {
-            "runs_started": 0,
-            "runs_completed": 0,
-            "runs_failed": 0,
-            "runs_cancelled": 0,
-            "tool_calls": 0,
-        }
+        self._runs = RunService(
+            repository,
+            runners,
+            timeout_seconds=timeout_seconds,
+            max_concurrent_runs=max_concurrent_runs,
+            max_history_messages=max_history_messages,
+            max_input_chars=max_input_chars,
+            max_output_chars=max_output_chars,
+            max_event_chars=max_event_chars,
+            cleanup_timeout_seconds=cleanup_timeout_seconds,
+        )
 
     @property
     def stats(self) -> dict:
         """运行统计快照（内存计数，重启清零）。"""
-        return {**self._stats, "active_runs": len(self._active)}
+        return self._runs.stats
+
+    @property
+    def _active(self) -> dict:
+        """兼容既有诊断与测试：执行中的任务表。"""
+        return self._runs._active
+
+    @property
+    def _closing(self) -> set:
+        """兼容既有诊断与测试：回收中的清理任务。"""
+        return self._runs._closing
 
     async def create_session(self) -> Session:
         session = Session(uuid4().hex, "新会话", datetime.now(UTC).isoformat())
@@ -61,7 +70,7 @@ class ChatService:
         return session
 
     async def delete_session(self, session_id: str) -> None:
-        if session_id in self._active:
+        if self._runs.has_active_session(session_id):
             raise ChatError("session_busy", "会话正在执行，请先停止生成")
         await self.repository.delete(session_id)
         logger.debug("Session deleted: session=%s", session_id)
@@ -87,10 +96,7 @@ class ChatService:
         Raises:
             ChatError: 会话没有执行中的请求（session_not_running）。
         """
-        task = self._active.get(session_id)
-        if task is None or task.done():
-            raise ChatError("session_not_running", "会话当前没有执行中的请求")
-        task.cancel()
+        self._runs.cancel_by_session(session_id)
 
     async def stream(self, session_id: str, content: str) -> AsyncIterator[Event]:
         """Execute a turn while preserving the previous snapshot on failure.
@@ -106,42 +112,23 @@ class ChatService:
             ChatError: The session, capacity, model or execution is unavailable.
         """
         content = self.validate_message(content)
-        session = await self.repository.get(session_id)
-        user = Message("user", content)
         logger.info(
             "Agent user message: session=%s data=%s",
             session_id,
             {"content": content},
         )
-        async with aclosing(
-            self._drive(session_id, session.messages + (user,))
-        ) as events:
-            async for event in events:
-                if event.type != "result":
-                    yield event
-                    continue
-                result = event.data["content"]
-                messages = (session.messages + (user, Message("assistant", result)))[
-                    -self.max_history_messages :
-                ]
-                updated = replace(
-                    session,
-                    title=content[:28] if not session.messages else session.title,
-                    messages=messages,
+        run = await self._runs.create_session_run(
+            session_id=session_id, content=content
+        )
+        async for event in self._consume(run):
+            if event.type == "result":
+                # 结果事件补充会话标识，保持既有响应形状
+                yield Event(
+                    "result",
+                    {"content": event.data["content"], "session_id": session_id},
                 )
-                logger.info(
-                    "Agent model response: session=%s data=%s",
-                    session_id,
-                    {"content": result},
-                )
-                # 先提交历史再向下游交付结果，保证失败时快照不污染
-                await self.repository.save(updated)
-                logger.debug(
-                    "Agent history committed: session=%s messages=%d",
-                    session_id,
-                    len(messages),
-                )
-                yield Event("result", {"content": result, "session_id": session_id})
+            else:
+                yield event
 
     async def run_stateless(
         self, messages: tuple[Message, ...]
@@ -154,139 +141,48 @@ class ChatService:
         Raises:
             ChatError: 消息序列不合法（invalid_message）或执行不可用。
         """
-        if not messages or messages[-1].role != "user":
-            raise ChatError("invalid_message", "消息列表必须以一条用户消息结尾")
-        self.validate_message(messages[-1].content)
-        trimmed = messages[-self.max_history_messages :]
-        for message in trimmed:
-            if len(message.content) > self.max_input_chars:
-                raise ChatError(
-                    "invalid_message",
-                    f"单条消息不能超过 {self.max_input_chars} 个字符",
-                )
-        run_id = f"stateless-{uuid4().hex[:12]}"
-        async with aclosing(self._drive(run_id, trimmed)) as events:
-            async for event in events:
-                yield event
+        run = await self._runs.create_stateless_run(messages)
+        async for event in self._consume(run):
+            yield event
 
-    async def _drive(
-        self, run_id: str, messages: tuple[Message, ...]
-    ) -> AsyncIterator[Event]:
-        """执行核心：注册容量、创建 runner、驱动事件流并施加输出限额。
+    async def _consume(self, run) -> AsyncIterator[Event]:
+        """订阅 Run 事件并映射为既有 Event；断开时请求取消（既有连接语义）。
 
-        以 result 事件结束（content 不带 session_id，由会话包装层补充）。
+        正常结束（成功/失败/取消终态）或本侧断开触发取消时，等待执行
+        收尾完成（清理有超时兜底），保证调用方看到结果时资源状态确定；
+        Run 已终态后的断开立即传播，清理由 RunService 独立兜底。
         """
-        if run_id in self._active:
-            raise ChatError("session_busy", "这个会话已有执行中的请求")
-        if len(self._active) >= self.max_concurrent_runs:
-            raise ChatError("capacity_exceeded", "当前执行数量已达上限，请稍后重试")
-        self._active[run_id] = asyncio.current_task()
-        self._stats["runs_started"] += 1
-        runner = None
-        started = perf_counter()
-        tool_calls = 0
-        completed = False
-        # run 标识进入日志上下文，本 run 链路（含 runner/工具层）日志自动携带
-        with log_context(run=run_id):
-            logger.info("Agent run started")
-            try:
-                logger.debug("Agent context loaded: messages=%d", len(messages))
-                async with asyncio.timeout(self.timeout_seconds):
-                    runner = await self.runners.create()
-                    logger.debug("Agent runner created")
-                    result = None
-                    output_size = 0
-                    async with aclosing(runner.stream(messages)) as events:
-                        async for event in events:
-                            if event.type == "tool_call":
-                                tool_calls += 1
-                                self._stats["tool_calls"] += 1
-                                logger.debug(
-                                    "Agent tool call received: count=%d",
-                                    tool_calls,
-                                )
-                            if event.type == "result":
-                                result = event.data.get("content")
-                            else:
-                                output_size += len(str(event.data))
-                                if output_size > self.max_event_chars:
-                                    raise ChatError(
-                                        "output_limit", "模型输出超过单次执行限制"
-                                    )
-                                if event.type == "tool_call":
-                                    logger.info("Agent tool call: data=%s", event.data)
-                                elif event.type == "tool_result":
-                                    logger.info(
-                                        "Agent tool result: data=%s", event.data
-                                    )
-                                yield event
-                    if not isinstance(result, str) or not result.strip():
-                        raise ChatError("runner_failed", "模型未返回有效回复")
-                    if len(result) > self.max_output_chars:
-                        raise ChatError("output_limit", "模型回复超过长度限制")
-                    completed = True
-                    self._stats["runs_completed"] += 1
-                    logger.info(
-                        "Agent run completed: elapsed_ms=%.0f output_chars=%d tool_calls=%d",
-                        (perf_counter() - started) * 1000,
-                        len(result),
-                        tool_calls,
-                    )
-                    yield Event("result", {"content": result})
-            except asyncio.CancelledError:
-                if not completed:
-                    self._stats["runs_cancelled"] += 1
-                    logger.info(
-                        "Agent run cancelled: elapsed_ms=%.0f",
-                        (perf_counter() - started) * 1000,
-                    )
-                raise
-            except GeneratorExit:
-                if not completed:
-                    self._stats["runs_cancelled"] += 1
-                    logger.info(
-                        "Agent stream closed: elapsed_ms=%.0f",
-                        (perf_counter() - started) * 1000,
-                    )
-                raise
-            except TimeoutError as exc:
-                self._stats["runs_failed"] += 1
-                logger.warning(
-                    "Agent run timed out: timeout_seconds=%s",
-                    self.timeout_seconds,
-                )
-                raise ChatError("run_timeout", "执行超时，请稍后重试") from exc
-            except ChatError as exc:
-                self._stats["runs_failed"] += 1
-                logger.warning("Agent run failed: code=%s", exc.code)
-                raise
-            except Exception as exc:
-                self._stats["runs_failed"] += 1
-                # SDK exception text may include upstream response bodies or credentials.
-                logger.warning("Agent execution failed: error=%s", type(exc).__name__)
-                raise ChatError(
-                    "runner_failed", "模型执行失败，请检查模型配置和服务状态"
-                ) from exc
-            finally:
-                try:
-                    if runner is not None:
-                        await self._dispose(runner)
-                finally:
-                    self._active.pop(run_id, None)
-
-    async def _dispose(self, runner: AgentRunner) -> None:
-        async def close():
-            try:
-                async with asyncio.timeout(self.cleanup_timeout_seconds):
-                    await runner.aclose()
-            except Exception as exc:
-                logger.warning("Runner cleanup failed: %s", type(exc).__name__)
-
-        task = asyncio.create_task(close())
-        self._closing.add(task)
-        task.add_done_callback(self._closing.discard)
-        # Disconnect cancellation must not interrupt disposal of owned connections.
-        await asyncio.shield(task)
+        wait = True
+        try:
+            async with aclosing(self._runs.subscribe(run.id)) as events:
+                async for event in events:
+                    if event.type == "status":
+                        status = event.data["status"]
+                        if status == "failed":
+                            error = event.data.get("error") or {}
+                            raise ChatError(
+                                error.get("code", "runner_failed"),
+                                error.get("message", "执行失败"),
+                            )
+                        if status == "cancelled":
+                            raise ChatError("run_cancelled", "已停止生成")
+                        if status == "succeeded":
+                            break
+                        # queued/running/cancelling 不向调用方暴露
+                        continue
+                    if event.type == "error":
+                        raise ChatError(
+                            event.data.get("code", "runner_failed"),
+                            event.data.get("message", "执行失败"),
+                        )
+                    yield Event(event.type, event.data)
+        except (GeneratorExit, asyncio.CancelledError):
+            # 返回 False 表示 Run 已终态，收尾与调用方无关
+            wait = self._runs.cancel_quietly(run.id)
+            raise
+        finally:
+            if wait:
+                await self._runs.wait_finished(run.id)
 
     def validate_message(self, content: str) -> str:
         content = content.strip()
@@ -298,10 +194,4 @@ class ChatService:
         return content
 
     async def shutdown(self) -> None:
-        tasks = set(self._active.values()) - {asyncio.current_task()}
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        if self._closing:
-            await asyncio.gather(*tuple(self._closing), return_exceptions=True)
+        await self._runs.shutdown()
