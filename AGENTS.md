@@ -56,6 +56,7 @@ feat(config): 新增运行配置的 JSON 加载
 ## 项目约定
 
 - 项目通过根目录 `main.py` 启动。
+- 同一 data 根只允许一个服务进程：main.py 启动时经 `runtime/datalock.py` 对 data/anyagent.lock 加 OS 级排他文件锁（Windows msvcrt / POSIX fcntl），已被占用时打印中文提示并以退出码 1 拒绝启动；锁随进程生命周期持有，进程退出由内核自动释放，无残留死锁文件。Windows 重启循环复用同一把锁，POSIX 经 execv 重新获取。
 - Python 代码只允许绝对导入，禁止 `from . ...`、`from .. ...` 等相对导入；该规则同样适用于包内模块、`__init__.py`、测试和类型检查分支。项目内导入使用完整的 `anyagent...` 模块路径，如 `from anyagent.configs.base import BaseSettings`，并继续遵守洋葱分层的依赖方向。Ruff 的 TID252 规则以 ban-relative-imports="all" 检查此约束。
 - 应用源码放在根目录 `anyagent/` 的职责子目录中，包根仅保留用于包标识和版本号的 `__init__.py`，不放业务实现。直接通过 Python 模块导入，不使用 `src/` 层或项目自身的打包安装；uv 只管理依赖，不生成项目的 `egg-info`。`__version__` 与 `pyproject.toml` 中的版本保持一致，不依赖安装元数据。
 - 采用依赖向内的洋葱分层：`core/domain/` 放领域模型和规则，`core/ports/` 定义替换契约，`core/services/`、`core/pipeline/` 及工具、MCP、知识和上下文子目录放应用流程。core 不导入 api、runtime、adapters、infrastructure、configs、Web 框架、ORM 或厂商 SDK；必要配置通过运行快照注入；utils 中仅允许依赖无运行配置与资源初始化的 anyagent.utils.logger 日志接口，不依赖其他 utils 模块。

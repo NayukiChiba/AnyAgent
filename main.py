@@ -12,6 +12,7 @@ from anyagent.configs import (
     paths,
 )
 from anyagent.runtime.bootstrap import create_app
+from anyagent.runtime.datalock import exit_if_locked
 from anyagent.runtime.frontend import ensure_frontend_build
 from anyagent.runtime.processes import terminate_child_processes
 from anyagent.runtime.restart import RestartController
@@ -82,12 +83,19 @@ def main() -> None:
     parser.add_argument("--port", type=int, help="Override the configured server port.")
     args = parser.parse_args()
 
-    while run_server(args, parser):
-        if os.name == "nt":
-            continue
-        os.execv(
-            sys.executable, [sys.executable, str(paths.get_main_path()), *sys.argv[1:]]
-        )
+    # 同一 data 根只允许一个服务进程；锁随进程生命周期持有，
+    # Windows 下重启循环复用同一把锁，POSIX 经 execv 重新获取
+    lock = exit_if_locked(paths.get_lock_path())
+    try:
+        while run_server(args, parser):
+            if os.name == "nt":
+                continue
+            os.execv(
+                sys.executable,
+                [sys.executable, str(paths.get_main_path()), *sys.argv[1:]],
+            )
+    finally:
+        lock.release()
 
 
 if __name__ == "__main__":

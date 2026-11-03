@@ -27,6 +27,11 @@ def get_migrations_dir() -> Path:
     return _SOURCE_ROOT / "migrations"
 
 
+def get_lock_path() -> Path:
+    """Return the data-directory process lock filename."""
+    return get_data_dir() / "anyagent.lock"
+
+
 def get_database_backup_path(path: Path, timestamp: int) -> Path:
     """Build a pre-migration database backup filename next to the database.
 
