@@ -66,7 +66,7 @@ def test_run_executes_and_publishes_events_with_monotonic_seq():
         seqs = [event.seq for event in events]
         assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
 
-        final = service.get_run(run.id)
+        final = await service.get_run(run.id)
         assert final.status == "succeeded" and final.result == "你好"
         assert final.finished_at is not None
         assert service.stats["runs_completed"] == 1
@@ -117,11 +117,11 @@ def test_subscribe_disconnect_does_not_stop_run():
                 received.append(event)
                 if event.type == "delta":
                     break  # 订阅断开
-        assert service.get_run(run.id).status == "running"
+        assert (await service.get_run(run.id)).status == "running"
 
         gate.set()
         await service.wait_finished(run.id)
-        assert service.get_run(run.id).status == "succeeded"
+        assert (await service.get_run(run.id)).status == "succeeded"
 
         # 重订阅只补发断开期间错过的事件，不重复
         last_seq = received[-1].seq
@@ -157,7 +157,7 @@ def test_slow_subscriber_is_marked_lagged_and_never_blocks_run():
 
         # 不再读取：执行不被慢订阅者阻塞，正常跑到终态
         await service.wait_finished(run.id)
-        assert service.get_run(run.id).status == "succeeded"
+        assert (await service.get_run(run.id)).status == "succeeded"
 
         # 恢复读取：收到溢出标记后订阅终止
         remaining = [event async for event in subscription]
@@ -173,7 +173,7 @@ def test_request_cancel_transitions_and_terminal_is_final():
         service = make_service(factory)
         session = await make_session(service.repository)
         run = await service.create_session_run(session_id=session.id, content="你好")
-        while service.get_run(run.id).status != "running":
+        while (await service.get_run(run.id)).status != "running":
             await asyncio.sleep(0)
 
         cancelled = service.request_cancel(run.id)
@@ -197,7 +197,7 @@ def test_request_cancel_transitions_and_terminal_is_final():
         factory.script = GOOD_SCRIPT
         rerun = await service.create_session_run(session_id=session.id, content="再来")
         await service.wait_finished(rerun.id)
-        assert service.get_run(rerun.id).status == "succeeded"
+        assert (await service.get_run(rerun.id)).status == "succeeded"
 
     asyncio.run(check())
 
@@ -215,7 +215,7 @@ def test_runner_error_ends_failed_without_history_commit():
         run = await service.create_session_run(session_id=session.id, content="你好")
         await service.wait_finished(run.id)
 
-        final = service.get_run(run.id)
+        final = await service.get_run(run.id)
         assert final.status == "failed"
         assert final.error.code == "runner_failed"
         assert "secret" not in final.error.message
@@ -239,7 +239,7 @@ def test_empty_result_and_timeout_end_failed():
         session = await make_session(service.repository)
         run = await service.create_session_run(session_id=session.id, content="你好")
         await service.wait_finished(run.id)
-        assert service.get_run(run.id).error.code == "runner_failed"
+        assert (await service.get_run(run.id)).error.code == "runner_failed"
 
         # 超时
         factory = MockRunnerFactory([("block",)])
@@ -247,7 +247,7 @@ def test_empty_result_and_timeout_end_failed():
         session = await make_session(service.repository, "s-2")
         run = await service.create_session_run(session_id=session.id, content="你好")
         await service.wait_finished(run.id)
-        final = service.get_run(run.id)
+        final = await service.get_run(run.id)
         assert final.status == "failed" and final.error.code == "run_timeout"
         assert factory.created[0].closed
 
@@ -262,7 +262,7 @@ def test_occupancy_and_capacity_rejections():
         session = await make_session(repository, "s-1")
         other = await make_session(repository, "s-2")
         run = await service.create_session_run(session_id=session.id, content="你好")
-        while service.get_run(run.id).status != "running":
+        while (await service.get_run(run.id)).status != "running":
             await asyncio.sleep(0)
 
         with pytest.raises(ChatError) as busy:
@@ -312,9 +312,9 @@ def test_terminal_records_are_pruned_beyond_retention(monkeypatch):
             await service.wait_finished(run.id)
             runs.append(run)
         with pytest.raises(ChatError) as missing:
-            service.get_run(runs[0].id)
+            await service.get_run(runs[0].id)
         assert missing.value.code == "run_not_found"
-        assert service.get_run(runs[-1].id).status == "succeeded"
+        assert (await service.get_run(runs[-1].id)).status == "succeeded"
 
     asyncio.run(check())
 

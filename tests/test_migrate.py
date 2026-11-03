@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from anyagent.configs import paths
-from anyagent.infrastructure.sqlite.migrate import INITIAL_REVISION, migrate_database
+from anyagent.infrastructure.sqlite.migrate import migrate_database
 
 
 @pytest.fixture
@@ -30,6 +30,16 @@ def _revision(path):
     with sqlite3.connect(path) as connection:
         rows = connection.execute("SELECT version_num FROM alembic_version").fetchall()
     return {row[0] for row in rows}
+
+
+def _head():
+    """迁移链路的最新版本号（随新增迁移自动跟进）。"""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    config = Config()
+    config.set_main_option("script_location", str(paths.get_migrations_dir()))
+    return ScriptDirectory.from_config(config).get_current_head()
 
 
 def _create_legacy_database(path):
@@ -65,7 +75,7 @@ def _fetch_session(path, session_id):
 def test_fresh_database_migrates_to_head(db_path):
     migrate_database(db_path)
     assert "anyagent_chat_sessions" in _tables(db_path)
-    assert _revision(db_path) == {INITIAL_REVISION}
+    assert _revision(db_path) == {_head()}
 
 
 def test_legacy_create_all_database_is_stamped_without_data_loss(db_path):
@@ -75,7 +85,7 @@ def test_legacy_create_all_database_is_stamped_without_data_loss(db_path):
 
     migrate_database(db_path)
 
-    assert _revision(db_path) == {INITIAL_REVISION}
+    assert _revision(db_path) == {_head()}
     assert _fetch_session(db_path, "legacy-1") == ("标题",)
 
 
@@ -83,7 +93,7 @@ def test_migration_is_idempotent(db_path):
     migrate_database(db_path)
     _insert_session(db_path, "keep-1")
     migrate_database(db_path)
-    assert _revision(db_path) == {INITIAL_REVISION}
+    assert _revision(db_path) == {_head()}
     assert _fetch_session(db_path, "keep-1") == ("标题",)
 
 
@@ -154,4 +164,4 @@ def test_repository_initialize_uses_migration(db_path):
             await repository.aclose()
 
     asyncio.run(check())
-    assert _revision(db_path) == {INITIAL_REVISION}
+    assert _revision(db_path) == {_head()}

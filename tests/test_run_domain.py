@@ -21,10 +21,12 @@ ALL_STATUSES = ["queued", "running", "cancelling", "succeeded", "failed", "cance
 ALLOWED_EDGES = {
     ("queued", "running"),
     ("queued", "cancelled"),
+    ("queued", "failed"),
     ("running", "succeeded"),
     ("running", "failed"),
     ("running", "cancelling"),
     ("cancelling", "cancelled"),
+    ("cancelling", "failed"),
 }
 
 

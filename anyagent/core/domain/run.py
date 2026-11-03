@@ -34,10 +34,12 @@ TERMINAL_STATUSES: frozenset[RunStatus] = frozenset(
 )
 
 # 合法状态转移表；未列出的边一律拒绝
+# queued→failed / cancelling→failed 用于中断与异常路径（如服务重启后
+# 标记残留执行）；正常取消路径仍是 cancelling→cancelled
 _TRANSITIONS: dict[RunStatus, frozenset[RunStatus]] = {
-    "queued": frozenset({"running", "cancelled"}),
+    "queued": frozenset({"running", "cancelled", "failed"}),
     "running": frozenset({"succeeded", "failed", "cancelling"}),
-    "cancelling": frozenset({"cancelled"}),
+    "cancelling": frozenset({"cancelled", "failed"}),
     "succeeded": frozenset(),
     "failed": frozenset(),
     "cancelled": frozenset(),

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from anyagent.core.domain.chat import ChatError, Event, Message, Session
 from anyagent.core.ports.chat import RunnerFactory, SessionRepository
+from anyagent.core.ports.run import RunRepository
 from anyagent.core.services.run import RunService
 from anyagent.utils.logger import get_logger
 
@@ -33,6 +34,7 @@ class ChatService:
         max_output_chars: int,
         max_event_chars: int,
         cleanup_timeout_seconds: float,
+        run_repository: RunRepository | None = None,
     ):
         self.repository = repository
         self.max_input_chars = max_input_chars
@@ -46,6 +48,7 @@ class ChatService:
             max_output_chars=max_output_chars,
             max_event_chars=max_event_chars,
             cleanup_timeout_seconds=cleanup_timeout_seconds,
+            run_repository=run_repository,
         )
 
     @property
@@ -97,6 +100,10 @@ class ChatService:
             ChatError: 会话没有执行中的请求（session_not_running）。
         """
         self._runs.cancel_by_session(session_id)
+
+    async def recover_interrupted(self) -> int:
+        """启动时标记仓储中的残留非终态 Run 为 run_interrupted。"""
+        return await self._runs.recover_interrupted()
 
     async def stream(self, session_id: str, content: str) -> AsyncIterator[Event]:
         """Execute a turn while preserving the previous snapshot on failure.

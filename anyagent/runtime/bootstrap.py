@@ -30,6 +30,7 @@ from anyagent.core.domain.chat import ChatError
 from anyagent.core.ports.chat import AgentRunner, RunnerFactory
 from anyagent.core.services.chat import ChatService
 from anyagent.infrastructure.openai.client import OpenAIClient
+from anyagent.infrastructure.sqlite.runs import SQLiteRunRepository
 from anyagent.infrastructure.sqlite.sessions import SQLiteSessionRepository
 from anyagent.runtime.restart import RestartController
 from anyagent.tools import build_tool_set
@@ -174,9 +175,16 @@ def create_app(
             max_sessions=settings.max_sessions,
             busy_timeout_seconds=database.busy_timeout_seconds,
         )
+        run_repository = SQLiteRunRepository(
+            database.file_path,
+            busy_timeout_seconds=database.busy_timeout_seconds,
+        )
         async with AsyncExitStack() as resources:
             resources.push_async_callback(repository.aclose)
             await repository.initialize()
+            # 会话仓储入口已完成表结构迁移，执行记录仓储直接连接
+            resources.push_async_callback(run_repository.aclose)
+            await run_repository.initialize()
             logger.info("Session storage connected: backend=sqlite")
             logger.debug(
                 "Agent limits loaded: max_sessions=%d max_history_messages=%d max_concurrent_runs=%d",
@@ -194,7 +202,10 @@ def create_app(
                 max_output_chars=settings.max_output_chars,
                 max_event_chars=settings.max_event_chars,
                 cleanup_timeout_seconds=settings.cleanup_timeout_seconds,
+                run_repository=run_repository,
             )
+            # 重启后把上次未能收尾的执行标记为中断，不自动重跑
+            await app.state.chat_service.recover_interrupted()
 
             probe_lock = asyncio.Lock()
 

@@ -31,6 +31,7 @@ from anyagent.core.domain.run import (
 from anyagent.core.pipeline.middleware import compose
 from anyagent.core.pipeline.stages import run_stages
 from anyagent.core.ports.chat import AgentRunner, RunnerFactory, SessionRepository
+from anyagent.core.ports.run import RunRepository
 from anyagent.utils.logger import get_logger, log_context
 
 logger = get_logger(__name__)
@@ -244,9 +245,12 @@ class RunService:
         max_output_chars: int,
         max_event_chars: int,
         cleanup_timeout_seconds: float,
+        run_repository: RunRepository | None = None,
     ):
         self.repository = repository
         self.runners = runners
+        # 执行记录仓储：可选；缺省时 Run 仅存活于内存（测试与隔离场景）
+        self.run_repository = run_repository
         self.timeout_seconds = timeout_seconds
         self.max_concurrent_runs = max_concurrent_runs
         self.max_history_messages = max_history_messages // 2 * 2
@@ -260,6 +264,7 @@ class RunService:
         # 执行中的任务（含清理中）：run_id → task
         self._active: dict[str, asyncio.Task] = {}
         self._closing: set[asyncio.Task] = set()
+        self._persisting: set[asyncio.Task] = set()
         # 运行统计：内存计数，重启清零
         self._stats = {
             "runs_started": 0,
@@ -330,6 +335,7 @@ class RunService:
             self._by_session[session.id] = run.id
         self._stats["runs_started"] += 1
         self._publish(entry, "status", {"status": "queued"})
+        self._persist(run)
         task = asyncio.create_task(self._execute(entry, session))
         entry.task = task
         self._active[run.id] = task
@@ -349,16 +355,18 @@ class RunService:
             logger.warning("Runner describe failed: %s", type(exc).__name__)
             return {}
 
-    def get_run(self, run_id: str) -> Run:
-        """查询 Run 最新快照。
+    async def get_run(self, run_id: str) -> Run:
+        """查询 Run 最新快照；内存未命中时回源仓储（重启后的历史 Run）。
 
         Raises:
             ChatError: 执行不存在或已被清理（run_not_found）。
         """
         entry = self._runs.get(run_id)
-        if entry is None:
-            raise ChatError("run_not_found", "执行不存在或已被清理")
-        return entry.run
+        if entry is not None:
+            return entry.run
+        if self.run_repository is not None:
+            return await self.run_repository.get(run_id)
+        raise ChatError("run_not_found", "执行不存在或已被清理")
 
     def has_active_session(self, session_id: str) -> bool:
         return session_id in self._by_session
@@ -377,7 +385,20 @@ class RunService:
         """
         entry = self._runs.get(run_id)
         if entry is None:
-            raise ChatError("run_not_found", "执行不存在或已被清理")
+            if self.run_repository is None:
+                raise ChatError("run_not_found", "执行不存在或已被清理")
+            # 重启后的历史 Run：无实时事件，按存档合成结果与终态
+            stored = await self.run_repository.get(run_id)
+            seq = 0
+            if stored.result is not None:
+                yield RunEvent(seq=seq, type="result", data={"content": stored.result})
+                seq += 1
+            yield RunEvent(
+                seq=seq,
+                type="status",
+                data={"status": stored.status},
+            )
+            return
         # 重放缓冲内未交付的事件（事件循环内无 await，重放到注册订阅者之间原子）
         for event in list(entry.events):
             if event.seq > since_seq:
@@ -521,6 +542,47 @@ class RunService:
             if entry.run.session_id is not None:
                 self._by_session.pop(entry.run.session_id, None)
             self._active.pop(entry.run.id, None)
+            self._persist(entry.run)
+
+    def _persist(self, run: Run) -> None:
+        """后台落库：输入/终态。持久化失败只记日志，不影响执行链路。"""
+
+        async def save():
+            try:
+                await self.run_repository.save(run)
+            except Exception as exc:
+                logger.error(
+                    "Run persistence failed: run=%s error=%s",
+                    run.id,
+                    type(exc).__name__,
+                )
+
+        if self.run_repository is None:
+            return
+        task = asyncio.create_task(save())
+        self._persisting.add(task)
+        task.add_done_callback(self._persisting.discard)
+
+    async def recover_interrupted(self) -> int:
+        """启动时把仓储中的残留非终态 Run 标记为 run_interrupted。
+
+        未知执行状态不自动重跑；返回标记数量。
+        """
+        if self.run_repository is None:
+            return 0
+        count = 0
+        for run in await self.run_repository.list_nonterminal():
+            marked = transition(
+                run,
+                "failed",
+                at=_now(),
+                error=RunError("run_interrupted", "服务重启，执行被中断"),
+            )
+            await self.run_repository.save(marked)
+            count += 1
+        if count:
+            logger.warning("服务重启，标记中断的执行: count=%d", count)
+        return count
 
     def _finish_failed(self, entry: _RunEntry, error: ChatError) -> None:
         """异常归一后的失败终态；已终态（如取消竞态）时不重复提交。"""
@@ -581,3 +643,5 @@ class RunService:
             await asyncio.gather(*tasks, return_exceptions=True)
         if self._closing:
             await asyncio.gather(*tuple(self._closing), return_exceptions=True)
+        if self._persisting:
+            await asyncio.gather(*tuple(self._persisting), return_exceptions=True)
