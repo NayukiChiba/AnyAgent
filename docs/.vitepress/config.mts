@@ -19,6 +19,7 @@ export default defineConfig({
           { text: '网页设置', link: '/guide/settings' },
           { text: '配置管理', link: '/guide/configuration' },
           { text: 'LangChain Agent', link: '/guide/agent' },
+          { text: 'Run API', link: '/guide/runs' },
           { text: '日志', link: '/guide/logging' },
           { text: '健康检查', link: '/guide/health' }
         ]
