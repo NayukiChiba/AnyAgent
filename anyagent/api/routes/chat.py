@@ -1,14 +1,10 @@
-"""HTTP, HTTP streaming and WebSocket access to the same chat service."""
+"""会话与对话的 HTTP 接口；实时事件订阅由 Run API 的 SSE 承担。"""
 
-import asyncio
-import json
 from contextlib import aclosing
 from dataclasses import asdict
-from urllib.parse import urlsplit
 
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from anyagent.core.domain.chat import ChatError
 from anyagent.core.services.chat import ChatService
@@ -61,7 +57,7 @@ def http_error(error: ChatError) -> HTTPException:
     return HTTPException(status, detail=error_data(error)["data"])
 
 
-def service(request: Request | WebSocket) -> ChatService:
+def service(request: Request) -> ChatService:
     return request.app.state.chat_service
 
 
@@ -146,90 +142,3 @@ async def send_message(session_id: str, body: MessageInput, request: Request) ->
         }
     except ChatError as error:
         raise http_error(error) from error
-
-
-@router.post("/api/v1/sessions/{session_id}/stream", tags=["agent"])
-async def stream_message(
-    session_id: str, body: MessageInput, request: Request
-) -> StreamingResponse:
-    try:
-        await service(request).repository.get(session_id)
-        service(request).validate_message(body.content)
-    except ChatError as error:
-        raise http_error(error) from error
-
-    async def stream():
-        try:
-            async with aclosing(
-                service(request).stream(session_id, body.content)
-            ) as events:
-                async for event in events:
-                    yield f"event: {event.type}\ndata: {json.dumps(asdict(event), ensure_ascii=False)}\n\n"
-        except ChatError as error:
-            yield f"event: error\ndata: {json.dumps(error_data(error), ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.websocket("/ws/sessions/{session_id}")
-async def chat_socket(websocket: WebSocket, session_id: str) -> None:
-    origin = websocket.headers.get("origin")
-    if origin and urlsplit(origin).netloc != websocket.headers.get("host"):
-        await websocket.close(code=1008)
-        return
-    await websocket.accept()
-    running: asyncio.Task | None = None
-
-    async def execute(content: str):
-        try:
-            async with aclosing(
-                service(websocket).stream(session_id, content)
-            ) as events:
-                async for event in events:
-                    await websocket.send_json(asdict(event))
-        except ChatError as error:
-            await websocket.send_json(error_data(error))
-
-    try:
-        await service(websocket).repository.get(session_id)
-        while True:
-            try:
-                payload = await websocket.receive_json()
-                if not isinstance(payload, dict):
-                    raise ValueError("Invalid message")
-                if payload.get("type") == "cancel":
-                    if running and not running.done():
-                        running.cancel()
-                        await asyncio.gather(running, return_exceptions=True)
-                        await websocket.send_json({"type": "cancelled", "data": {}})
-                    continue
-                if payload.get("type") != "message":
-                    raise ValueError("Unknown message type")
-                body = MessageInput.model_validate(
-                    {key: value for key, value in payload.items() if key != "type"}
-                )
-                if running and not running.done():
-                    await websocket.send_json(
-                        error_data(
-                            ChatError("session_busy", "请等待当前回复或先停止生成")
-                        )
-                    )
-                    continue
-                running = asyncio.create_task(execute(body.content))
-            except (ValueError, ValidationError):
-                await websocket.send_json(
-                    error_data(ChatError("invalid_message", "请发送有效的消息内容"))
-                )
-    except ChatError as error:
-        await websocket.send_json(error_data(error))
-        await websocket.close(code=1008)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if running is not None:
-            running.cancel()
-            await asyncio.gather(running, return_exceptions=True)

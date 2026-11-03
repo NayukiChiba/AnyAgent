@@ -36,7 +36,7 @@ def configured_app(tmp_path, monkeypatch, model_endpoint):
 
 
 @pytest.mark.parametrize("streaming", [True, False])
-def test_real_sdk_tool_loop_http_sse_websocket_and_hot_reload(
+def test_real_sdk_tool_loop_events_and_hot_reload(
     configured_app, model_endpoint, streaming
 ):
     app, connection = configured_app
@@ -66,10 +66,15 @@ def test_real_sdk_tool_loop_http_sse_websocket_and_hot_reload(
         connection.update(model="reloaded-model", api_key="reloaded-secret")
         paths.get_config_path("model_config").write_text(json.dumps(connection))
         assert client.get("/api/v1/agent").json()["model"] == "reloaded-model"
-        response = client.post(f"{url}/stream", json={"content": "再计算一次"})
-        assert response.headers["content-type"].startswith("text/event-stream")
-        assert "event: result" in response.text
-        assert ("event: delta" in response.text) is streaming
+        # 第二轮经 Run API 执行并订阅事件流（TestClient 缓冲至流结束）
+        run = client.post(
+            "/api/v1/runs",
+            json={"session_id": session["id"], "content": "再计算一次"},
+        ).json()
+        events = client.get(f"/api/v1/runs/{run['id']}/events")
+        assert events.headers["content-type"].startswith("text/event-stream")
+        assert "event: result" in events.text
+        assert ("event: delta" in events.text) is streaming
         assert upstream[2]["body"]["model"] == "reloaded-model"
         assert upstream[2]["authorization"] == "Bearer reloaded-secret"
         assert [message["role"] for message in upstream[2]["body"]["messages"]] == [
@@ -78,19 +83,11 @@ def test_real_sdk_tool_loop_http_sse_websocket_and_hot_reload(
             "assistant",
             "user",
         ]
-        with client.websocket_connect(f"/ws/sessions/{session['id']}") as socket:
-            socket.send_json({"type": "message", "content": "第三次"})
-            events = []
-            while not events or events[-1]["type"] not in {"result", "error"}:
-                events.append(socket.receive_json())
-            assert [event["type"] for event in events] == expected
-            assert events[-1]["type"] == "result", events
-            assert events[-1]["data"]["content"] == "结果是 5"
         assert all(
             request["body"].get("stream", False) is streaming for request in upstream
         )
         history = client.get(url).json()["messages"]
-        assert len(history) == 6
+        assert len(history) == 4
         assert client.post(f"{url}/messages", json={"content": " "}).status_code == 422
         assert client.delete(url).status_code == 204
         assert client.get(url).status_code == 404
@@ -111,10 +108,16 @@ def test_disabled_model_returns_public_error_without_saving_turn(configured_app)
         assert result.status_code == 503
         assert result.json()["detail"]["code"] == "model_not_configured"
         assert client.get(url).json()["messages"] == []
-        assert (
-            "event: error"
-            in client.post(f"{url}/stream", json={"content": "你好"}).text
-        )
+        # Run API：创建成功后执行转失败终态，错误经事件流与查询暴露
+        run = client.post(
+            "/api/v1/runs", json={"session_id": session["id"], "content": "你好"}
+        ).json()
+        events = client.get(f"/api/v1/runs/{run['id']}/events")
+        assert "event: status" in events.text and "failed" in events.text
+        snapshot = client.get(f"/api/v1/runs/{run['id']}").json()
+        assert snapshot["status"] == "failed"
+        assert snapshot["error"]["code"] == "model_not_configured"
+        assert client.get(url).json()["messages"] == []
 
 
 def test_streaming_switch_hot_reload_preserves_credentials(
@@ -155,25 +158,25 @@ def test_frontend_preferences_reload_and_input_limit_is_shared(
     with TestClient(app) as client:
         status = client.get("/api/v1/agent").json()
         assert status["limits"]["max_input_chars"] == 3
-        assert status["frontend"]["default_transport"] == "websocket"
+        assert status["frontend"]["restart_poll_interval_ms"] == 1000
         paths.get_config_path("frontend_config").write_text(
-            json.dumps({"default_transport": "http", "cancel_timeout_ms": 2000})
+            json.dumps({"restart_poll_interval_ms": 2000})
         )
         assert (
             client.get("/api/v1/agent").json()["frontend"]
-            == FrontendSettings(
-                default_transport="http", cancel_timeout_ms=2000
-            ).model_dump()
+            == FrontendSettings(restart_poll_interval_ms=2000).model_dump()
         )
         session = client.post("/api/v1/sessions").json()
         url = f"/api/v1/sessions/{session['id']}"
-        for endpoint in ["messages", "stream"]:
-            response = client.post(f"{url}/{endpoint}", json={"content": "超长输入"})
-            assert response.status_code == 422
-            assert "3" in response.json()["detail"]["message"]
-        with client.websocket_connect(f"/ws/sessions/{session['id']}") as socket:
-            socket.send_json({"type": "message", "content": "超长输入"})
-            assert socket.receive_json()["data"]["code"] == "invalid_message"
+        # 会话消息与 Run API 共用同一输入限额
+        response = client.post(f"{url}/messages", json={"content": "超长输入"})
+        assert response.status_code == 422
+        assert "3" in response.json()["detail"]["message"]
+        response = client.post(
+            "/api/v1/runs", json={"session_id": session["id"], "content": "超长输入"}
+        )
+        assert response.status_code == 422
+        assert "3" in response.json()["detail"]["message"]
         assert not model_endpoint[1]
         assert client.get(url).json()["messages"] == []
 

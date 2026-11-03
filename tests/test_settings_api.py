@@ -115,7 +115,11 @@ def test_secret_retention_clear_and_model_hot_reload(settings_client):
         ("model_config", {"streaming": "false"}, "streaming"),
         ("model_config", {"api_key": 42}, "api_key"),
         ("langchain_config", {"max_steps": 1}, "max_steps"),
-        ("frontend_config", {"default_transport": "tcp"}, "default_transport"),
+        (
+            "frontend_config",
+            {"restart_poll_interval_ms": 50},
+            "restart_poll_interval_ms",
+        ),
         ("frontend_config", {"unknown": True}, "unknown"),
     ],
 )
@@ -150,10 +154,13 @@ def test_conflicts_nested_updates_and_restart_notice(settings_client):
     )
     assert not group(client, "logging_config")["restart_required"]
     assert (
-        save(client, "frontend_config", {"default_transport": "http"}).status_code
+        save(client, "frontend_config", {"restart_poll_interval_ms": 2000}).status_code
         == 200
     )
-    assert client.get("/api/v1/agent").json()["frontend"]["default_transport"] == "http"
+    assert (
+        client.get("/api/v1/agent").json()["frontend"]["restart_poll_interval_ms"]
+        == 2000
+    )
 
 
 def test_request_errors_do_not_echo_secrets_and_reject_cross_origin(settings_client):
@@ -192,7 +199,9 @@ def test_write_failure_retains_original(settings_client, monkeypatch):
     monkeypatch.setattr(management, "_save_update", denied)
     path = paths.get_config_path("frontend_config")
     original = path.read_bytes()
-    response = save(settings_client, "frontend_config", {"default_transport": "http"})
+    response = save(
+        settings_client, "frontend_config", {"restart_poll_interval_ms": 2000}
+    )
     assert response.status_code == 503
     assert path.read_bytes() == original
 

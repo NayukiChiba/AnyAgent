@@ -91,35 +91,44 @@ test('streaming Markdown handles an open code fence and the final reply', async 
   await page.route(`**/api/v1/sessions/${session.id}`, (route) =>
     route.fulfill({ json: { ...session, messages } }),
   )
-  let socket
-  let release
-  const opened = new Promise((resolve) => {
-    release = resolve
+  // 事件订阅分两段：首段只到增量（开放代码围栏）后意外结束，
+  // 前端按 Last-Event-ID 续订取得最终结果
+  const partial = '# 流式回复\n\n```python\nprint("逐步到达")'
+  const complete = `${partial}\n\`\`\`\n\n**完成**`
+  const frame = (id, event, data) =>
+    `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify({ seq: id, type: event, data })}\n\n`
+  let phase = 'delta'
+  await page.route('**/api/v1/runs', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 201, json: { id: 'md-run', status: 'queued' } })
+    }
+    return route.continue()
   })
-  await page.routeWebSocket(`**/ws/sessions/${session.id}`, (ws) => {
-    socket = ws
-    ws.onMessage(() => {
-      ws.send(
-        JSON.stringify({
-          type: 'delta',
-          data: { content: '# 流式回复\n\n```python\nprint("逐步到达")' },
-        }),
-      )
-      release()
+  await page.route('**/api/v1/runs/md-run/events', (route) => {
+    if (phase === 'delta') {
+      return route.fulfill({
+        contentType: 'text/event-stream',
+        body: frame(2, 'delta', { content: partial }),
+      })
+    }
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body:
+        frame(3, 'result', { content: complete }) +
+        frame(4, 'status', { status: 'succeeded' }),
     })
   })
   await page.goto('/')
   await page.getByLabel('消息内容').fill('请给出示例')
   await page.getByRole('button', { name: '发送 ↑' }).click()
-  await opened
+  // 中间状态：代码围栏尚未闭合时的流式渲染
   await expect(page.getByRole('heading', { name: '流式回复' })).toBeVisible()
   await expect(page.locator('.assistant pre code')).toHaveText('print("逐步到达")')
-  const complete = '# 流式回复\n\n```python\nprint("逐步到达")\n```\n\n**完成**'
+  phase = 'result'
   messages = [
     { role: 'user', content: '请给出示例' },
     { role: 'assistant', content: complete },
   ]
-  socket.send(JSON.stringify({ type: 'result', data: { content: complete } }))
   await expect(page.locator('.assistant strong')).toHaveText('完成')
   await expect(page.getByRole('button', { name: '停止生成' })).toHaveCount(0)
   await page.reload()

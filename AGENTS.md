@@ -83,15 +83,15 @@ feat(config): 新增运行配置的 JSON 加载
 
 - 首个 Runner 使用 LangChain 官方 SDK，实现最小对话与工具循环；通过 core/ports 注入 ChatService，API 共用服务，不按连接方式重复实现业务流程。
 - 前端使用 Vue 3，源码、package.json、锁文件和依赖位于 frontend/；构建输出不提交，构建后的页面由 main.py 启动的 FastAPI 同源提供。
-- 对外仅使用 HTTP 和 WebSocket；SSE 属于 HTTP 流式响应，保留作为 HTTP 流式连接选项。
+- 对外仅使用 HTTP；SSE 属于 HTTP 流式响应，是实时事件订阅的唯一传输（Run API 的 events 端点，按事件序号断点续传）。
 - 会话与已完成的历史通过 SQLAlchemy 异步 SQLite 仓储持久化，Run 的输入、结果与终态同样落库（anyagent_runs 表）；进行中的事件流、订阅者与执行任务仍保存在单进程内存中，启动时把仓储中的残留非终态 Run 标记为 run_interrupted，不自动重跑。ORM 仅位于 infrastructure，runtime 通过既有 SessionRepository 端口注入 core；各操作使用独立 AsyncSession 和短事务，不在模型调用期间持有数据库事务。
 - 数据库配置独立保存于 data/configs/database_config.json，数据库路径仅由 configs/paths.py 校验并限制在 data/ 内。启动时经 Alembic 版本化迁移升级表结构（migrations/versions/ 脚本，由 infrastructure/sqlite/migrate.py 编程式驱动，不使用 alembic.ini；存量库先 stamp 到初始版本），有待执行的迁移时非空库自动备份、失败从备份恢复，版本已与 head 一致时不备份不执行，迁移完成再连接；退出待执行清理完成后关闭连接池。数据库损坏或不可读必须报错，不得恢复为空库。
 - 成功轮次以单个事务保存标题和有序历史快照，保留 max_history_messages 的现有窗口；失败或取消不保存半轮消息。会话容量检查与创建在同一写事务内完成。
 - 模型地址、名称和 API Key 独立保存于 data/configs/model_config.json，新执行读取最新配置，既有执行使用自己的快照。API 不返回模型密钥；LangChain prompt 与执行预算使用独立配置，启动时读取。
-- 当前流式连接断开会取消其执行，失败或取消不提交半轮历史。未来后台 Run、重放和持久恢复需要显式实现与验收，不将当前连接语义描述为这些能力。
+- Run 创建后执行与订阅解耦：订阅断开不停止执行，事件按单调序号缓冲并支持 Last-Event-ID 断点重连；前端离开页面或点击停止时显式取消 Run。失败或取消不提交半轮历史。未来后台 Run、重放和持久恢复需要显式实现与验收，不将当前连接语义描述为这些能力。
 
 - 所有可调运行项在 data/configs 分类 JSON 中保存，默认值统一在 configs/default.py；外层读取配置并注入 core，前端从状态接口获取其所需的公开参数，不在核心或页面硬编码这些运行项。
-- model_config.json 的 streaming 控制上游流式/非流式调用，默认开启；关闭后不发送文本 delta，仍保留工具事件和最终结果。开关与 HTTP/WebSocket 连接方式独立，新执行热重载。
+- model_config.json 的 streaming 控制上游流式/非流式调用，默认开启；关闭后不发送文本 delta，仍保留工具事件和最终结果。开关与对外连接方式独立，新执行热重载。
 - 有效配置缺少新增默认项时，递归补齐并使用同目录临时文件原子更新，保留显式值、密钥和文件权限；未知字段、无效值与必填字段缺失仍按既有备份恢复规范处理。
 
 ## 网页设置约定
